@@ -31,6 +31,7 @@ import scala.jdk.CollectionConverters._
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault()
   private val featureCache = new FinalizedFeatureCache(brokerFeatures)
+  private val defaultMaxProduceApiVersion: Short = 8
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
@@ -38,6 +39,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
@@ -62,6 +64,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -82,6 +85,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -101,6 +105,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
