@@ -20,11 +20,10 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
-import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
-import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
-import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
-import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
+import static org.apache.kafka.common.record.Records.*;
+
 
 /**
  * A byte buffer backed log input stream. This class avoids the need to copy records by returning
@@ -81,8 +80,22 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
             return null;
 
         byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
-        if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
-            throw new CorruptRecordException("Invalid magic found in record: " + magic);
+        if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE) {
+            long offset = buffer.getLong(buffer.position() + OFFSET_OFFSET);
+            int startPos = Math.max(0, buffer.position() - 100);
+            ByteBuffer dup = buffer.duplicate();
+            dup.position(startPos);
+            int maxLen = Math.min(dup.remaining(), 200);
+            byte[] content = new byte[maxLen];
+            dup.get(content, 0, maxLen);
+            StringBuilder sb = new StringBuilder(content.length * 2);
+            for(byte b: content)
+                sb.append(String.format("%02x", b));
+            String errorMsg = " record size " + recordSize + " remaining size " + remaining +
+                " current buffer position " + buffer.position() + " buffer limit " + buffer.limit() + " offset " + offset;
+            throw new CorruptRecordException("Invalid magic found in record: " + magic + errorMsg +
+                " buffer content near current position is " + sb.toString());
+        }
 
         return recordSize + LOG_OVERHEAD;
     }

@@ -237,6 +237,7 @@ public class Sender implements Runnable {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
+                e.printStackTrace(System.err);
             }
         }
 
@@ -250,6 +251,7 @@ public class Sender implements Runnable {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
+                e.printStackTrace(System.err);
             }
         }
         if (forceClose) {
