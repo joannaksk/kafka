@@ -20,9 +20,12 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
-import static org.apache.kafka.common.record.Records.*;
+import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
+import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
+import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
+import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
+import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 
 
 /**
