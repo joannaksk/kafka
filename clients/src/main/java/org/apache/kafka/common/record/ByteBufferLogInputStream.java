@@ -20,9 +20,12 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
-import static org.apache.kafka.common.record.Records.*;
+import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
+import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
+import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
+import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
+import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 
 
 /**
@@ -89,7 +92,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
             byte[] content = new byte[maxLen];
             dup.get(content, 0, maxLen);
             StringBuilder sb = new StringBuilder(content.length * 2);
-            for(byte b: content)
+            for (byte b: content)
                 sb.append(String.format("%02x", b));
             String errorMsg = " record size " + recordSize + " remaining size " + remaining +
                 " current buffer position " + buffer.position() + " buffer limit " + buffer.limit() + " offset " + offset;
