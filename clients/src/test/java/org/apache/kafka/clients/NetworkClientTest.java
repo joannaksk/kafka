@@ -138,6 +138,72 @@ public class NetworkClientTest {
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
     }
 
+    @Test
+    public void testCloseClearsCompletedReceives() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
+            Collections.<TopicPartition, MemoryRecords>emptyMap());
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        client.send(request, time.milliseconds());
+        assertTrue(client.hasInFlightRequests());
+
+        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        resp.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        // Save completed receive references for looking back after close call
+        List<NetworkReceive> completedReceives = selector.completedReceives();
+        client.close();
+
+        completedReceives.forEach(completedReceive -> assertNull(completedReceive.payload()));
+        assertTrue(selector.completedReceives().isEmpty());
+    }
+
+    @Test
+    public void testSetEnableClientResponseWithFinalize() {
+        client.ready(node, time.milliseconds());
+        client.setEnableClientResponseWithFinalize(true);
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
+            Collections.<TopicPartition, MemoryRecords>emptyMap());
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        client.send(request, time.milliseconds());
+        assertTrue(client.hasInFlightRequests());
+
+        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        resp.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        List<ClientResponse> responses = client.poll(1, time.milliseconds());
+        assertEquals(1, responses.size());
+
+        ClientResponse response = responses.get(0);
+        assertTrue(response instanceof ClientResponseWithFinalize);
+
+        client.setEnableClientResponseWithFinalize(false);
+    }
+
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
@@ -159,6 +225,7 @@ public class NetworkClientTest {
         buffer.flip();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
+
         assertEquals(1, responses.size());
         assertTrue("The handler should have executed.", handler.executed);
         assertTrue("Should have a response body.", handler.response.hasResponse());
@@ -538,7 +605,7 @@ public class NetworkClientTest {
         assertFalse(client.isReady(node, time.milliseconds()));
     }
 
-    private static class TestCallbackHandler implements RequestCompletionHandler {
+    public static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
         public ClientResponse response;
 

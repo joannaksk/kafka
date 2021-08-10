@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
@@ -109,6 +112,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.powermock.reflect.Whitebox;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -184,6 +188,90 @@ public class FetcherTest {
             assertTrue(executorService.awaitTermination(5, TimeUnit.SECONDS));
         }
     }
+
+    @Test
+    public void testFetchIncrementClientResponseRefCount() {
+        Set<TopicPartition> topicPartitions = new HashSet<>();
+        topicPartitions.add(tp0);
+        topicPartitions.add(tp1);
+        subscriptions.assignFromUser(topicPartitions);
+        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(topicPartitions, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        ConcurrentLinkedQueue<Object> fetches = Whitebox.getInternalState(fetcher, "completedFetches");
+        ClientResponse response = Whitebox.getInternalState(fetches.peek(), "response");
+        AtomicLong refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(2, refCount.longValue());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1));
+
+        refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(0, refCount.longValue());
+    }
+
+    @Test
+    public void testFetcherCloseCleanupRefCount() {
+        Set<TopicPartition> topicPartitions = new HashSet<>();
+        topicPartitions.add(tp0);
+        topicPartitions.add(tp1);
+        subscriptions.assignFromUser(topicPartitions);
+        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(topicPartitions, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        ConcurrentLinkedQueue<Object> fetches = Whitebox.getInternalState(fetcher, "completedFetches");
+        ClientResponse response = Whitebox.getInternalState(fetches.peek(), "response");
+        AtomicLong refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(2, refCount.longValue());
+
+        fetcher.close();
+        assertTrue(fetches.isEmpty());
+
+        refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(0, refCount.longValue());
+    }
+
+    @Test
+    public void testFetchErrorDecrementsRefCount() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NOT_LEADER_FOR_PARTITION, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        ConcurrentLinkedQueue<Object> fetches = Whitebox.getInternalState(fetcher, "completedFetches");
+        ClientResponse response = Whitebox.getInternalState(fetches.peek(), "response");
+        AtomicLong refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(1, refCount.longValue());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertFalse(partitionRecords.containsKey(tp0));
+
+        refCount = Whitebox.getInternalState(response, "refCount");
+        assertEquals(0, refCount.longValue());
+    }
+
 
     @Test
     public void testFetchNormal() {
@@ -1888,7 +1976,7 @@ public class FetcherTest {
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(
             TopicPartition tp, MemoryRecords records, Errors error, long hw, long lastStableOffset, int throttleTime) {
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(fullFetchResponse(tp, records, error, hw, lastStableOffset, throttleTime));
+        client.prepareResponse(fullFetchResponse(singleton(tp), records, error, hw, lastStableOffset, throttleTime));
         consumerClient.poll(time.timer(0));
         return fetcher.fetchedRecords();
     }
@@ -2784,13 +2872,18 @@ public class FetcherTest {
     }
 
     private FetchResponse<MemoryRecords> fullFetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
-        return fullFetchResponse(tp, records, error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, throttleTime);
+        return fullFetchResponse(singleton(tp), records, error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, throttleTime);
     }
 
-    private FetchResponse<MemoryRecords> fullFetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw,
+    private FetchResponse<MemoryRecords> fullFetchResponse(Set<TopicPartition> tpSet, MemoryRecords records, Errors error, long hw, int throttleTime) {
+        return fullFetchResponse(tpSet, records, error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, throttleTime);
+    }
+
+    private FetchResponse<MemoryRecords> fullFetchResponse(Set<TopicPartition> tpSet, MemoryRecords records, Errors error, long hw,
                                             long lastStableOffset, int throttleTime) {
-        Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = Collections.singletonMap(tp,
-                new FetchResponse.PartitionData<>(error, hw, lastStableOffset, 0L, null, records));
+        Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = tpSet.stream()
+            .collect(Collectors.toMap(topicPartition -> topicPartition,
+                topicPartition -> new FetchResponse.PartitionData<>(error, hw, lastStableOffset, 0L, null, records)));
         return new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), throttleTime, INVALID_SESSION_ID);
     }
 
