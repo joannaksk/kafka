@@ -1014,6 +1014,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
+                    kafkaConsumerMetrics.recordMetadataRequest();
             }
         } finally {
             release();
@@ -1078,6 +1079,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.subscribe(pattern, listener);
             this.coordinator.updatePatternSubscription(metadata.fetch());
             this.metadata.requestUpdateForNewTopics();
+            this.kafkaConsumerMetrics.recordMetadataRequest();
         } finally {
             release();
         }
@@ -1170,6 +1172,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions))) {
                     if (!skipMetadataCacheUpdate) {
                         metadata.requestUpdateForNewTopics();
+                        kafkaConsumerMetrics.recordMetadataRequest();
                     }
                 }
             }

@@ -1033,6 +1033,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             metadata.add(topic);
             int version = metadata.requestUpdate();
+            this.metrics.sensor("metadata-request-rate").record();
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);

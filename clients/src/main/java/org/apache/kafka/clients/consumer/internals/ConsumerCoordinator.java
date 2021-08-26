@@ -51,6 +51,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -199,6 +200,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         this.metadata.requestUpdate();
+        this.sensors.metadataRequestRateSensor.record();
     }
 
     @Override
@@ -232,6 +234,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe))
             metadata.requestUpdateForNewTopics();
+            sensors.metadataRequestRateSensor.record();
     }
 
     private ConsumerPartitionAssignor lookupAssignor(String name) {
@@ -263,6 +266,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 if (this.subscriptions.subscribeFromPattern(newSubscription))
                     metadata.requestUpdateForNewTopics();
+                    sensors.metadataRequestRateSensor.record();
                 this.joinedSubscription = newJoinedSubscription;
             }
         }
@@ -470,6 +474,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
                         this.metadata.requestUpdate();
+                        this.sensors.metadataRequestRateSensor.record();
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
@@ -517,6 +522,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // which ensures that all metadata changes will eventually be seen
         if (this.subscriptions.groupSubscribe(topics))
             metadata.requestUpdateForNewTopics();
+            sensors.metadataRequestRateSensor.record();
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
@@ -1272,10 +1278,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Sensor assignCallbackSensor;
         private final Sensor loseCallbackSensor;
         private final Sensor pollInterval;
+        private final Sensor metadataRequestRateSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
+            this.metadataRequestRateSensor = metrics.sensor("consumer-coordinator-metadata-request-rate");
+            this.metadataRequestRateSensor.add(new Meter(metrics.metricName("consumer-coordinator-metadata-request-rate",
+                this.metricGrpName,
+                "The average per-second number of metadata request sent by the consumer-coordinator"),
+                metrics.metricName("consumer-coordinator-metadata-request-sent-total",
+                    this.metricGrpName,
+                    "The total number of metadata requests sent by the consumer-coordinator")
+                ));
             this.commitSensor = metrics.sensor("commit-latency");
             this.commitSensor.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,

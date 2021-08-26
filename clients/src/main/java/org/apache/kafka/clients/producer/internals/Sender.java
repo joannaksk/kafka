@@ -351,6 +351,8 @@ public class Sender implements Runnable {
             log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}",
                 result.unknownLeaderTopics);
             this.metadata.requestUpdate();
+            this.sensors.metadataRequestRateSensor.record();
+
         }
 
         // remove any nodes we aren't ready to send to
@@ -833,6 +835,7 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
+        public final Sensor metadataRequestRateSensor;
         private final SenderMetricsRegistry metrics;
         private final Time time;
 
@@ -858,6 +861,9 @@ public class Sender implements Runnable {
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             this.recordsPerRequestSensor.add(new Meter(metrics.recordSendRate, metrics.recordSendTotal));
             this.recordsPerRequestSensor.add(metrics.recordsPerRequestAvg, new Avg());
+
+            this.metadataRequestRateSensor = metrics.sensor("metadata-request-rate");
+            this.metadataRequestRateSensor.add(new Meter(metrics.metadataRequestRate, metrics.metadataRequestSentTotal));
 
             this.retrySensor = metrics.sensor("record-retries");
             this.retrySensor.add(new Meter(metrics.recordRetryRate, metrics.recordRetryTotal));
