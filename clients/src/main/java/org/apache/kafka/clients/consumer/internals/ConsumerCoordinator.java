@@ -234,7 +234,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe))
             metadata.requestUpdateForNewTopics();
-            sensors.metadataRequestRateSensor.record();
+        sensors.metadataRequestRateSensor.record();
     }
 
     private ConsumerPartitionAssignor lookupAssignor(String name) {
@@ -266,7 +266,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 if (this.subscriptions.subscribeFromPattern(newSubscription))
                     metadata.requestUpdateForNewTopics();
-                    sensors.metadataRequestRateSensor.record();
+                sensors.metadataRequestRateSensor.record();
                 this.joinedSubscription = newJoinedSubscription;
             }
         }
@@ -522,7 +522,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // which ensures that all metadata changes will eventually be seen
         if (this.subscriptions.groupSubscribe(topics))
             metadata.requestUpdateForNewTopics();
-            sensors.metadataRequestRateSensor.record();
+        sensors.metadataRequestRateSensor.record();
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
