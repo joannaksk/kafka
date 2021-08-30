@@ -1013,8 +1013,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 fetcher.clearBufferedDataForUnassignedTopics(topics);
                 log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 if (this.subscriptions.subscribe(new HashSet<>(topics), listener)) {
-                  metadata.requestUpdateForNewTopics();
-                  kafkaConsumerMetrics.recordMetadataRequest();
+                   metadata.requestUpdateForNewTopics();
+                   kafkaConsumerMetrics.recordMetadataRequest();
                 }
             }
         } finally {
