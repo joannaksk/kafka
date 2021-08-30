@@ -232,9 +232,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             metadata.requestUpdateForNewTopics();
-        sensors.metadataRequestRateSensor.record();
+            sensors.metadataRequestRateSensor.record();
+        }
+
     }
 
     private ConsumerPartitionAssignor lookupAssignor(String name) {
@@ -264,9 +266,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 newSubscription.addAll(addedTopics);
                 newJoinedSubscription.addAll(addedTopics);
 
-                if (this.subscriptions.subscribeFromPattern(newSubscription))
+                if (this.subscriptions.subscribeFromPattern(newSubscription)) {
                     metadata.requestUpdateForNewTopics();
-                sensors.metadataRequestRateSensor.record();
+                    sensors.metadataRequestRateSensor.record();
+                }
                 this.joinedSubscription = newJoinedSubscription;
             }
         }
