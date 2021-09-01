@@ -58,6 +58,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -247,6 +249,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Sender sender;
     private final Thread ioThread;
     private final CompressionType compressionType;
+    private final Sensor msgSendLatencySensor;
     private final Sensor errors;
     private final Time time;
     private final Serializer<K> keySerializer;
@@ -355,6 +358,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.metrics.setReplaceOnDuplicateMetric(config.getBoolean(ProducerConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
+            this.msgSendLatencySensor = metrics.sensor("message-produce-latency-avg");
+            this.msgSendLatencySensor.add(new MetricName("message-produce-latency-avg",
+                PRODUCER_METRIC_GROUP_NAME,
+                "The average latency between record queuing and get acknowledged in ms",
+                Collections.singletonMap("client-id", clientId)), new Avg());
+            this.msgSendLatencySensor.add(new MetricName("message-produce-latency-max",
+                PRODUCER_METRIC_GROUP_NAME,
+                "The max latency between record queuing and get acknowledged in ms",
+                Collections.singletonMap("client-id", clientId)), new Max());
+
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             if (keySerializer == null) {
@@ -934,6 +947,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
             }
+            long startTime = time.milliseconds();
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true);
 
@@ -959,6 +973,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
+            long endTime = time.milliseconds();
+            msgSendLatencySensor.record(endTime - startTime, endTime);
             return result.future;
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
