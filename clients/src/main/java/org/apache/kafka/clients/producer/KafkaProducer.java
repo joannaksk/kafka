@@ -249,7 +249,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
-    private final Sensor metadataRequestRateSensor;
     private final Time time;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
@@ -356,14 +355,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
-            this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
-            this.metadataRequestRateSensor.add(new Meter(metrics.metricName("producer-metadata-request-rate",
-                "producer-metrics",
-                "The average per-second number of metadata request sent by the producer"),
-                metrics.metricName("producer-metadata-request-sent-total",
-                    "producer-metrics",
-                    "The total number of metadata requests sent by the producer")
-            ));
             this.metrics.setReplaceOnDuplicateMetric(config.getBoolean(ProducerConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -428,7 +419,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         clusterResourceListeners,
                         Time.SYSTEM,
                         config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG),
-                        config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
+                        config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                        metrics);
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
@@ -1043,7 +1035,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             metadata.add(topic);
             int version = metadata.requestUpdate();
-            this.metadataRequestRateSensor.record();
+            metadata.recordMetadataRequest();
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);

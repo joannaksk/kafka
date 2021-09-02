@@ -351,7 +351,7 @@ public class Sender implements Runnable {
             log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}",
                 result.unknownLeaderTopics);
             this.metadata.requestUpdate();
-            this.sensors.metadataRequestRateSensor.record();
+            this.metadata.recordMetadataRequest();
 
         }
 
@@ -478,6 +478,7 @@ public class Sender implements Runnable {
             // For non-coordinator requests, sleep here to prevent a tight loop when no node is available
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
+            metadata.recordMetadataRequest();
         }
 
         transactionManager.retry(nextRequestHandler);
@@ -566,6 +567,7 @@ public class Sender implements Runnable {
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
+            metadata.recordMetadataRequest();
         }
     }
 
@@ -685,6 +687,7 @@ public class Sender implements Runnable {
                             "to request metadata update now", batch.topicPartition, error.exception().toString());
                 }
                 metadata.requestUpdate();
+                metadata.recordMetadataRequest();
             }
         } else {
             completeBatch(batch, response);
@@ -835,7 +838,6 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
-        public final Sensor metadataRequestRateSensor;
         private final SenderMetricsRegistry metrics;
         private final Time time;
 
@@ -861,9 +863,6 @@ public class Sender implements Runnable {
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             this.recordsPerRequestSensor.add(new Meter(metrics.recordSendRate, metrics.recordSendTotal));
             this.recordsPerRequestSensor.add(metrics.recordsPerRequestAvg, new Avg());
-
-            this.metadataRequestRateSensor = metrics.sensor("metadata-request-rate");
-            this.metadataRequestRateSensor.add(new Meter(metrics.metadataRequestRate, metrics.metadataRequestSentTotal));
 
             this.retrySensor = metrics.sensor("record-retries");
             this.retrySensor.add(new Meter(metrics.recordRetryRate, metrics.recordRetryTotal));
