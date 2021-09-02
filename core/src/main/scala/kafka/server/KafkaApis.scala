@@ -1696,11 +1696,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (config.unofficialClientLoggingEnable) {
       // Check if the last part of clientSoftwareName (after commitId) is an unexpected software name
-      val softwareName = apiVersionRequest.data.clientSoftwareName().split("-").last
+      val softwareNameAndCommit = apiVersionRequest.data.clientSoftwareName()
+      val softwareName = softwareNameAndCommit.split("-").last
       if (!config.expectedClientSoftwareNames.contains(softwareName)) {
+        val softwareVersion = apiVersionRequest.data.clientSoftwareVersion()
         val clientIdentity = request.context.clientId() + " " + request.context.clientAddress() + " " + request.context.principal()
         unofficialClientsCache.get(clientIdentity)
-        warn(s"received ApiVersionsRequest from user with unofficial client type. clientId clientAddress principal = $clientIdentity")
+        warn(s"received ApiVersionsRequest from user with unofficial client software name. clientSoftwareName = $softwareNameAndCommit. clientSoftwareVersion = $softwareVersion. clientId clientAddress principal = $clientIdentity")
       }
     }
 

@@ -78,7 +78,8 @@ object Defaults {
     "AvroKafkaConsumerFactory", "AvroKafkaConsumerFactoryFactory", "AvroKafkaProducerFactory", "AvroKafkaProducerFactoryFactory",
     "RawKafkaConsumerFactory", "RawKafkaConsumerFactoryFactory", "RawKafkaProducerFactory", "RawKafkaProducerFactoryFactory",
     "AvroKafkaProducerBuilder", "AvroKafkaConsumerBuilder", "RawKafkaProducerBuilder", "RawKafkaConsumerBuilder",
-    "TrackerProcessorFactory", "TrackingConsumerFactory", "TrackingProducerFactory")
+    "TrackerProcessorFactory", "TrackingConsumerFactory", "TrackingProducerFactory",
+    "AdminKafkaClientFactory", "AdminKafkaClientFactoryFactory", "AdminClientBuilder")
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
