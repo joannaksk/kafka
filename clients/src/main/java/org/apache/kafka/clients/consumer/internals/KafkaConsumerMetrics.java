@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.common.metrics.stats.Meter;
 
 
 public class KafkaConsumerMetrics implements AutoCloseable {
