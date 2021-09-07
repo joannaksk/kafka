@@ -46,7 +46,8 @@ import java.util.Map;
 import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
-import static org.junit.Assert.*;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -77,7 +78,7 @@ public class SaslServerAuthenticatorTest {
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
-            SCRAM_SHA_256.mechanismName(),new DefaultChannelMetadataRegistry());
+            SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
