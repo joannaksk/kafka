@@ -144,10 +144,10 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
     }
 
     public IntGaugeSuite(Logger log,
-      String suiteName,
-      Metrics metrics,
-      Function<K, MetricName> metricNameCalculator,
-      int maxEntries) {
+        String suiteName,
+        Metrics metrics,
+        Function<K, MetricName> metricNameCalculator,
+        int maxEntries) {
         this.log = log;
         this.suiteName = suiteName;
         this.metrics = metrics;
