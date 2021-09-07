@@ -158,8 +158,8 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
     this.pending = new ConcurrentLinkedDeque<>();
     this.modifyMetricsLock = new ReentrantLock();
     this.closed = false;
-//    log.trace("{}: created new gauge suite with maxEntries = {}.",
-//        suiteName, maxEntries);
+    log.trace("{}: created new gauge suite with maxEntries = {}.",
+        suiteName, maxEntries);
   }
 
   public void increment(K key) {
