@@ -352,6 +352,7 @@ public class Sender implements Runnable {
                 result.unknownLeaderTopics);
             this.metadata.requestUpdate();
             this.metadata.recordMetadataRequest();
+
         }
 
         // remove any nodes we aren't ready to send to

@@ -58,7 +58,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -249,7 +248,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
-    private final Sensor metadataRequestRateSensor;
     private final Time time;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
@@ -356,14 +354,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
-            this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
-            this.metadataRequestRateSensor.add(new Meter(metrics.metricName("producer-metadata-request-rate",
-                "producer-metrics",
-                "The average per-second number of metadata request sent by the producer"),
-                metrics.metricName("producer-metadata-request-sent-total",
-                    "producer-metrics",
-                    "The total number of metadata requests sent by the producer")
-            ));
             this.metrics.setReplaceOnDuplicateMetric(config.getBoolean(ProducerConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
