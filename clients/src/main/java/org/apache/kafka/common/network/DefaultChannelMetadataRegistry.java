@@ -17,34 +17,34 @@
 package org.apache.kafka.common.network;
 
 public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
-  private CipherInformation cipherInformation;
-  private ClientInformation clientInformation;
+    private CipherInformation cipherInformation;
+    private ClientInformation clientInformation;
 
-  @Override
-  public void registerCipherInformation(final CipherInformation cipherInformation) {
-    if (this.cipherInformation != null) {
-      this.cipherInformation = cipherInformation;
+    @Override
+    public void registerCipherInformation(final CipherInformation cipherInformation) {
+        if (this.cipherInformation != null) {
+            this.cipherInformation = cipherInformation;
+        }
     }
-  }
 
-  @Override
-  public CipherInformation cipherInformation() {
-    return this.cipherInformation;
-  }
+    @Override
+    public CipherInformation cipherInformation() {
+        return this.cipherInformation;
+    }
 
-  @Override
-  public void registerClientInformation(final ClientInformation clientInformation) {
-    this.clientInformation = clientInformation;
-  }
+    @Override
+    public void registerClientInformation(final ClientInformation clientInformation) {
+        this.clientInformation = clientInformation;
+    }
 
-  @Override
-  public ClientInformation clientInformation() {
-    return this.clientInformation;
-  }
+    @Override
+    public ClientInformation clientInformation() {
+        return this.clientInformation;
+    }
 
-  @Override
-  public void close() {
-    this.cipherInformation = null;
-    this.clientInformation = null;
-  }
+    @Override
+    public void close() {
+        this.cipherInformation = null;
+        this.clientInformation = null;
+    }
 }

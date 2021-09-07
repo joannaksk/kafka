@@ -28,12 +28,12 @@ public interface ChannelMetadataRegistry extends Closeable {
    * Register information about the SSL cipher we are using.
    *  Re-registering the information will overwrite the previous one.
    */
-  void registerCipherInformation(CipherInformation cipherInformation);
+    void registerCipherInformation(CipherInformation cipherInformation);
 
   /**
    * Get the currently registered cipher information.
    */
-  CipherInformation cipherInformation();
+    CipherInformation cipherInformation();
 
   /**
    * Register information about the client client we are using.
@@ -41,15 +41,15 @@ public interface ChannelMetadataRegistry extends Closeable {
    * multiple times or not at all. Re-registering the information will
    * overwrite the previous one.
    */
-  void registerClientInformation(ClientInformation clientInformation);
+    void registerClientInformation(ClientInformation clientInformation);
 
   /**
    * Get the currently registered client information.
    */
-  ClientInformation clientInformation();
+    ClientInformation clientInformation();
 
   /**
    * Unregister everything that has been registered and close the registry.
    */
-  void close();
+    void close();
 }

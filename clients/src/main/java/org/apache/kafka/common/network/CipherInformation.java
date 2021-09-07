@@ -19,43 +19,43 @@ package org.apache.kafka.common.network;
 import java.util.Objects;
 
 public class CipherInformation {
-  private final String cipher;
-  private final String protocol;
+    private final String cipher;
+    private final String protocol;
 
-  public CipherInformation(String cipher, String protocol) {
-    this.cipher = cipher == null || cipher.isEmpty()  ? "unknown" : cipher;
-    this.protocol = protocol == null || protocol.isEmpty()  ? "unknown" : protocol;
-  }
-
-  public String cipher() {
-    return cipher;
-  }
-
-  public String protocol() {
-    return protocol;
-  }
-
-  @Override
-  public String toString() {
-    return "CipherInformation(cipher=" + cipher +
-        ", protocol=" + protocol + ")";
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(cipher, protocol);
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (o == null) {
-      return false;
+    public CipherInformation(String cipher, String protocol) {
+        this.cipher = cipher == null || cipher.isEmpty()  ? "unknown" : cipher;
+        this.protocol = protocol == null || protocol.isEmpty()  ? "unknown" : protocol;
     }
-    if (!(o instanceof CipherInformation)) {
-      return false;
+
+    public String cipher() {
+        return cipher;
     }
-    CipherInformation other = (CipherInformation) o;
-    return other.cipher.equals(cipher) &&
+
+    public String protocol() {
+        return protocol;
+    }
+
+    @Override
+    public String toString() {
+        return "CipherInformation(cipher=" + cipher +
+            ", protocol=" + protocol + ")";
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(cipher, protocol);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
+        }
+        if (!(o instanceof CipherInformation)) {
+            return false;
+        }
+        CipherInformation other = (CipherInformation) o;
+        return other.cipher.equals(cipher) &&
         other.protocol.equals(protocol);
-  }
+    }
 }
