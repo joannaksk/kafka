@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.common.metrics.stats.Meter;
 
 
 public class KafkaConsumerMetrics implements AutoCloseable {
@@ -32,7 +31,6 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
-    private final Sensor metadataRequestRateSensor;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
@@ -67,14 +65,6 @@ public class KafkaConsumerMetrics implements AutoCloseable {
                 metricGroupName,
                 "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());
-        this.metadataRequestRateSensor = metrics.sensor("consumer-metadata-request");
-        this.metadataRequestRateSensor.add(new Meter(metrics.metricName("consumer-metadata-request-rate-",
-            metricGroupName,
-            "The average per-second number of metadata request sent by the consumer"),
-            metrics.metricName("consumer-metadata-request-sent-total",
-                metricGroupName,
-                "The total number of metadata requests sent by the consumer")
-        ));
     }
 
     public void recordPollStart(long pollStartMs) {
@@ -88,10 +78,6 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         long pollTimeMs = pollEndMs - pollStartMs;
         double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
         this.pollIdleSensor.record(pollIdleRatio);
-    }
-
-    public void recordMetadataRequest() {
-        this.metadataRequestRateSensor.record();
     }
 
     @Override

@@ -428,7 +428,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         clusterResourceListeners,
                         Time.SYSTEM,
                         config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG),
-                        config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
+                        config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                        metrics);
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
@@ -1043,7 +1044,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             metadata.add(topic);
             int version = metadata.requestUpdate();
-            this.metadataRequestRateSensor.record();
+            metadata.recordMetadataRequest();
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);
