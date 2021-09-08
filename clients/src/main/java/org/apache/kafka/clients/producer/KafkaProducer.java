@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
