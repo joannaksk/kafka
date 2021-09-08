@@ -239,7 +239,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
     private static Sensor msgSendLatencySensor = null;
-    private static AtomicLong msgQueuingTime;
+    private static AtomicLong msgQueuingTime = new AtomicLong(0);
 
     private final String clientId;
     // Visible for testing
