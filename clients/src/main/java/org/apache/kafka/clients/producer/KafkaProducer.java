@@ -239,7 +239,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
     private static Sensor msgSendLatencySensor = null;
-    private static AtomicLong msgQueuingTime = new AtomicLong(0);
 
     private final String clientId;
     // Visible for testing
@@ -905,6 +904,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throwIfProducerClosed();
             // first make sure the metadata for the topic is available
             ClusterAndWaitTime clusterAndWaitTime;
+            long startTime = time.milliseconds();
             try {
                 clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             } catch (KafkaException e) {
@@ -943,9 +943,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
-            msgQueuingTime.set(time.milliseconds());
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, time, this.interceptors, tp);
+            Callback interceptCallback = new InterceptorCallback<>(callback, startTime, time, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
@@ -962,7 +961,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
                 // producer callback will make sure to call both 'callback' and interceptor callback
-                interceptCallback = new InterceptorCallback<>(callback, time, this.interceptors, tp);
+                interceptCallback = new InterceptorCallback<>(callback, startTime, time, this.interceptors, tp);
 
                 result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, false);
@@ -1333,8 +1332,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    public static void recordMsgProducingLatency(long now) {
-        msgSendLatencySensor.record(now - msgQueuingTime.get(), now);
+    public static void recordMsgProducingLatency(long start, long now) {
+        msgSendLatencySensor.record(now - start, now);
     }
 
     private static class FutureFailure implements Future<RecordMetadata> {
@@ -1381,18 +1380,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final ProducerInterceptors<K, V> interceptors;
         private final TopicPartition tp;
         private final Time time;
+        private final long startTime;
 
-        private InterceptorCallback(Callback userCallback, Time time, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
+        private InterceptorCallback(Callback userCallback, long startTime, Time time, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.tp = tp;
             this.time = time;
+            this.startTime = startTime;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
-            recordMsgProducingLatency(time.milliseconds());
+            recordMsgProducingLatency(startTime, time.milliseconds());
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
