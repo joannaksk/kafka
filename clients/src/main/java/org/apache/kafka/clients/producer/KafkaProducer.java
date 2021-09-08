@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
@@ -237,6 +238,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
+    private static Sensor msgSendLatencySensor = null;
+    private static AtomicLong msgQueuingTime;
 
     private final String clientId;
     // Visible for testing
@@ -249,7 +252,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Sender sender;
     private final Thread ioThread;
     private final CompressionType compressionType;
-    private final Sensor msgSendLatencySensor;
     private final Sensor errors;
     private final Time time;
     private final Serializer<K> keySerializer;
@@ -358,12 +360,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.metrics.setReplaceOnDuplicateMetric(config.getBoolean(ProducerConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
-            this.msgSendLatencySensor = metrics.sensor("message-produce-latency-avg");
-            this.msgSendLatencySensor.add(new MetricName("message-produce-latency-avg",
+            msgSendLatencySensor = metrics.sensor("message-produce-latency-avg");
+            msgSendLatencySensor.add(metrics.metricName("message-produce-latency-avg",
                 PRODUCER_METRIC_GROUP_NAME,
                 "The average latency between record queuing and get acknowledged in ms",
                 Collections.singletonMap("client-id", clientId)), new Avg());
-            this.msgSendLatencySensor.add(new MetricName("message-produce-latency-max",
+            msgSendLatencySensor.add(metrics.metricName("message-produce-latency-max",
                 PRODUCER_METRIC_GROUP_NAME,
                 "The max latency between record queuing and get acknowledged in ms",
                 Collections.singletonMap("client-id", clientId)), new Max());
@@ -941,13 +943,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
+            msgQueuingTime.set(time.milliseconds());
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+            Callback interceptCallback = new InterceptorCallback<>(callback, time, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
             }
-            long startTime = time.milliseconds();
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true);
 
@@ -960,7 +962,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
                 // producer callback will make sure to call both 'callback' and interceptor callback
-                interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+                interceptCallback = new InterceptorCallback<>(callback, time, this.interceptors, tp);
 
                 result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, false);
@@ -973,8 +975,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
-            long endTime = time.milliseconds();
-            msgSendLatencySensor.record(endTime - startTime, endTime);
             return result.future;
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
@@ -1333,6 +1333,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    public static void recordMsgProducingLatency(long now) {
+        msgSendLatencySensor.record(now - msgQueuingTime.get(), now);
+    }
+
     private static class FutureFailure implements Future<RecordMetadata> {
 
         private final ExecutionException exception;
@@ -1376,16 +1380,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
         private final TopicPartition tp;
+        private final Time time;
 
-        private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
+        private InterceptorCallback(Callback userCallback, Time time, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.tp = tp;
+            this.time = time;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
+            recordMsgProducingLatency(time.milliseconds());
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
