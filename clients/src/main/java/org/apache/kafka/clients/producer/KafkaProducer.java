@@ -1382,7 +1382,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final long startTime;
 
         private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
-           this(userCallback, Long.MIN_VALUE, null, interceptors, tp);
+            this(userCallback, Long.MIN_VALUE, null, interceptors, tp);
         }
 
         private InterceptorCallback(Callback userCallback, long startTime, Time time, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
@@ -1396,7 +1396,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
-            if (time != null){
+            if (time != null) {
                 recordMsgProducingLatency(startTime, time.milliseconds());
             }
             if (this.userCallback != null)
