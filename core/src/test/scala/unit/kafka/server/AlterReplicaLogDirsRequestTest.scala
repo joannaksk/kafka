@@ -99,6 +99,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 1)))
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 2)))
   }
+
   private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String]): AlterReplicaLogDirsResponse = {
     val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
     connectAndReceive[AlterReplicaLogDirsResponse](request, destination = controllerSocketServer)
