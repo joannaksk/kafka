@@ -417,11 +417,16 @@ public class KafkaChannel implements AutoCloseable {
         return null;
     }
 
+
     public long write() throws IOException {
         if (send == null)
             return 0;
 
         midWrite = true;
+        if (send.completed()) {
+            midWrite = false;
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+        }
         return send.writeTo(transportLayer);
     }
 

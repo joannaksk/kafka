@@ -590,13 +590,15 @@ public class Selector implements Selectable, AutoCloseable {
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
-                try {
-                    attemptWrite(key, channel, nowNanos);
-                } catch (Exception e) {
-                    sendFailed = true;
-                    throw e;
+                if (channel.ready() && key.isWritable() && !channel.maybeBeginClientReauthentication(
+                    () -> nowNanos)) {
+                    try {
+                        attemptWrite(key, channel, nowNanos);
+                    } catch (Exception e) {
+                        sendFailed = true;
+                        throw e;
+                    }
                 }
 
                 /* cancel any defunct sockets */
@@ -676,7 +678,6 @@ public class Selector implements Selectable, AutoCloseable {
         //previous receive(s) already staged or otherwise in progress then read from it
         if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasStagedReceive(channel)
             && !explicitlyMutedChannels.contains(channel)) {
-
             String nodeId = channel.id();
 
             while (true) {
@@ -691,7 +692,6 @@ public class Selector implements Selectable, AutoCloseable {
                 NetworkReceive receive = channel.maybeCompleteReceive();
                 if (receive == null)
                     break;
-
                 sensors.recordCompletedReceive(nodeId, receive.size(), currentTimeMs);
                 addToStagedReceives(channel, receive);
             }
