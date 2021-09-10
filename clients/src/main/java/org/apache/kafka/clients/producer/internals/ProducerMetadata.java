@@ -75,13 +75,13 @@ public class ProducerMetadata extends Metadata {
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.metrics = metrics;
         this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
-        MetricName metadataRequestRate = metrics.metricName("producer-metadata-request-rate",
+        this.metadataRequestRateSensor.add(new Meter(metrics.metricName("producer-metadata-request-rate",
             "producer-metrics",
-            "The average per-second number of metadata request sent by the producer");
-        MetricName metadataRequestTotal = metrics.metricName("producer-metadata-request-total",
-            "producer-metrics",
-            "The total number of metadata requests sent by the producer");
-        this.metadataRequestRateSensor.add(new Meter(metadataRequestRate, metadataRequestTotal));
+            "The average per-second number of metadata request sent by the producer"),
+            metrics.metricName("producer-metadata-request-sent-total",
+                "producer-metrics",
+                "The total number of metadata requests sent by the producer")
+        ));
     }
     public void recordMetadataRequest() {
         this.metadataRequestRateSensor.record();

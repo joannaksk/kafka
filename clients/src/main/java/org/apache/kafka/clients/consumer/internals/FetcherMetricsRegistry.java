@@ -56,7 +56,8 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLeadAvg;
     public MetricNameTemplate partitionPreferredReadReplica;
     public MetricNameTemplate consumerMetadataRequestRate;
-    public MetricNameTemplate consumerMetadataRequestTotal;
+    public MetricNameTemplate metadataRequestRate;
+    public MetricNameTemplate metadataRequestTotal;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -105,6 +106,10 @@ public class FetcherMetricsRegistry {
                 "The average throttle time in ms", tags);
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
                 "The maximum throttle time in ms", tags);
+        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-sent-total",
+            "consumer-metrics", "The total number of metadata requests sent by the consumer", tags);
+        this.metadataRequestRate = new MetricNameTemplate("consumer-metadata-request-rate", "consumer-metrics",
+            "The average per-second number of metadata request sent by the consumer", tags);
 
         /***** Topic level *****/
         Set<String> topicTags = new LinkedHashSet<>(tags);
@@ -144,13 +149,6 @@ public class FetcherMetricsRegistry {
         this.partitionPreferredReadReplica = new MetricNameTemplate(
                 "preferred-read-replica", "consumer-fetch-manager-metrics",
                 "The current read replica for the partition, or -1 if reading from leader", partitionTags);
-        this.consumerMetadataRequestRate = new MetricNameTemplate(
-                "consumer-metadata-send-rate",
-                "consumer-metrics",
-                "The average per-second number of metadata request sent by the consumer", tags);
-        this.consumerMetadataRequestTotal = new MetricNameTemplate("consumer-metadata-send-total",
-                "consumer-metrics",
-            "The total number of metadata requests sent by the consumer", tags);
     }
 
     public List<MetricNameTemplate> getAllTemplates() {
@@ -184,8 +182,8 @@ public class FetcherMetricsRegistry {
             partitionRecordsLeadMin,
             partitionRecordsLeadAvg,
             partitionPreferredReadReplica,
-            consumerMetadataRequestRate,
-            consumerMetadataRequestTotal
+            metadataRequestRate,
+            metadataRequestTotal
         );
     }
 
