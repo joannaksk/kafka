@@ -199,7 +199,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         this.metadata.requestUpdate();
-        this.metadata.recordMetadataRequest();
     }
 
     @Override
@@ -233,7 +232,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             metadata.requestUpdateForNewTopics();
-            metadata.recordMetadataRequest();
         }
 
     }
@@ -267,7 +265,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 if (this.subscriptions.subscribeFromPattern(newSubscription)) {
                     metadata.requestUpdateForNewTopics();
-                    metadata.recordMetadataRequest();
                 }
                 this.joinedSubscription = newJoinedSubscription;
             }
@@ -476,7 +473,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
                         this.metadata.requestUpdate();
-                        this.metadata.recordMetadataRequest();
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
@@ -524,7 +520,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // which ensures that all metadata changes will eventually be seen
         if (this.subscriptions.groupSubscribe(topics)) {
             metadata.requestUpdateForNewTopics();
-            metadata.recordMetadataRequest();
+
         }
 
 

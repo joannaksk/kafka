@@ -55,9 +55,7 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLeadMin;
     public MetricNameTemplate partitionRecordsLeadAvg;
     public MetricNameTemplate partitionPreferredReadReplica;
-    public MetricNameTemplate consumerMetadataRequestRate;
-    public MetricNameTemplate metadataRequestRate;
-    public MetricNameTemplate metadataRequestTotal;
+
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -106,10 +104,6 @@ public class FetcherMetricsRegistry {
                 "The average throttle time in ms", tags);
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
                 "The maximum throttle time in ms", tags);
-        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-sent-total",
-            "consumer-metrics", "The total number of metadata requests sent by the consumer", tags);
-        this.metadataRequestRate = new MetricNameTemplate("consumer-metadata-request-rate", "consumer-metrics",
-            "The average per-second number of metadata request sent by the consumer", tags);
 
         /***** Topic level *****/
         Set<String> topicTags = new LinkedHashSet<>(tags);
@@ -181,9 +175,7 @@ public class FetcherMetricsRegistry {
             partitionRecordsLead,
             partitionRecordsLeadMin,
             partitionRecordsLeadAvg,
-            partitionPreferredReadReplica,
-            metadataRequestRate,
-            metadataRequestTotal
+            partitionPreferredReadReplica
         );
     }
 

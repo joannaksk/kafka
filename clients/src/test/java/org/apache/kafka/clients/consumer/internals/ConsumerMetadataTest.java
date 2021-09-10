@@ -169,7 +169,7 @@ public class ConsumerMetadataTest {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
         return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
-                subscription, new LogContext(), new ClusterResourceListeners(), new Metrics());
+                subscription, new LogContext(), new ClusterResourceListeners());
     }
 
 }

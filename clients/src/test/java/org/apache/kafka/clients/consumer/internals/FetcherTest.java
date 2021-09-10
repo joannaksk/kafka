@@ -4182,7 +4182,7 @@ public class FetcherTest {
         metrics = new Metrics(metricConfig, time);
         subscriptions = subscriptionState;
         metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
-            subscriptions, logContext, new ClusterResourceListeners(), metrics);
+            subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
