@@ -96,7 +96,7 @@ public class FetcherMetricsRegistry {
                 "The number of fetch requests per second.", tags);
         this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
                 "The total number of fetch requests.", tags);
-        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-sent-total",
+        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-total",
             "consumer-metrics", "The total number of metadata requests sent by the consumer", tags);
         this.metadataRequestRate = new MetricNameTemplate("consumer-metadata-request-rate", "consumer-metrics",
             "The average per-second number of metadata request sent by the consumer", tags);
