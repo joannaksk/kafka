@@ -68,6 +68,21 @@ public class ProducerMetadata extends Metadata {
         this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
+    public ProducerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time,
+        long topicExpiryMs,
+        boolean allowAutoTopicCreation,
+        long clusterMetadataExpireMs) {
+        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, clusterMetadataExpireMs);
+        this.log = logContext.logger(ProducerMetadata.class);
+        this.time = time;
+        this.topicExpiryMs = topicExpiryMs;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
+    }
+
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
         return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), allowAutoTopicCreation);
