@@ -789,7 +789,7 @@ public class NetworkClient implements KafkaClient {
             throw new IllegalStateException("leastLoadedNodeAlgorithm cannot be null");
         }
 
-        if (this.metadataUpdater.isUpdateClusterMetadataDue(now) && !this.bootstrapServers.isEmpty()) {
+        if (this.metadataUpdater.isUpdateClusterMetadataDue(now)) {
             //update cluster metadata due, resolve bootstrap server and randomly pick up
             //one node from the resolved node set as least loaded node
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
