@@ -95,6 +95,11 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return false;
+        }
+
+        @Override
         public long maybeUpdate(long now) {
             return Long.MAX_VALUE;
         }
