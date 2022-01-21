@@ -243,15 +243,26 @@ class RequestSendThread(val controllerId: Int,
                         val stateChangeLogger: StateChangeLogger,
                         name: String,
                         val controllerChannelManager: ControllerChannelManager)
-  extends ShutdownableThread(name = name) {
+extends ShutdownableThread(name = name) with KafkaMetricsGroup {
 
   logIdent = s"[RequestSendThread controllerId=$controllerId] "
+
+  private val QueueTimeMetricName = "QueueTime"
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
   private val controllerRequestMerger = new ControllerRequestMerger
 
   private var firstUpdateMetadataWithPartitionsSent = false
+
+  private var requestEnqueueTimeMs = time.milliseconds()
+
+  val queueSizeGauge = newGauge(
+    QueueTimeMetricName,
+    new Gauge[Long] {
+      def value: Long = time.milliseconds() - requestEnqueueTimeMs
+    },
+  )
 
   def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
@@ -278,6 +289,7 @@ class RequestSendThread(val controllerId: Int,
       // handle case 4 first
       if (!controllerRequestMerger.hasPendingRequests()) {
         val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
+        requestEnqueueTimeMs = enqueueTimeMs
         mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
       }
 
@@ -296,6 +308,7 @@ class RequestSendThread(val controllerId: Int,
     } else {
       // use the old behavior of sending each item in the queue as a separate request
       val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
+      requestEnqueueTimeMs = enqueueTimeMs
       updateMetrics(apiKey, enqueueTimeMs)
       (requestBuilder, callback)
     }
