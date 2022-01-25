@@ -699,10 +699,10 @@ public class NetworkClient implements KafkaClient {
         if (log.isDebugEnabled()) {
             int latestClientVersion = clientRequest.apiKey().latestVersion();
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} with correlation id {} to node {}", clientRequest.apiKey(), request,
+                log.warn("Sending {} {} with correlation id {} to node {}", clientRequest.apiKey(), request,
                         clientRequest.correlationId(), destination);
             } else {
-                log.debug("Using older server API v{} to send {} {} with correlation id {} to node {}",
+                log.warn("Using older server API v{} to send {} {} with correlation id {} to node {}",
                         header.apiVersion(), clientRequest.apiKey(), request, clientRequest.correlationId(), destination);
             }
         }
@@ -1422,7 +1422,7 @@ public class NetworkClient implements KafkaClient {
             // highly dependent on the behavior of leastLoadedNode.
             Node node = leastLoadedNode(now);
             if (node == null) {
-                log.debug("Give up sending metadata request since no node is available");
+                log.warn("Give up sending metadata request since no node is available");
                 return reconnectBackoffMs;
             }
 
@@ -1524,7 +1524,7 @@ public class NetworkClient implements KafkaClient {
             if (canSendRequest(nodeConnectionId, now)) {
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion();
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
-                log.debug("Sending metadata request {} to node {}", metadataRequest, node);
+                log.warn("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 this.inProgressRequestVersion = requestAndVersion.requestVersion;
                 return defaultRequestTimeoutMs;
@@ -1541,7 +1541,7 @@ public class NetworkClient implements KafkaClient {
 
             if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // We don't have a connection to this node right now, make one
-                log.debug("Initialize connection to node {} for sending metadata request", node);
+                log.warn("Initialize connection to node {} for sending metadata request", node);
                 initiateConnect(node, now);
                 return reconnectBackoffMs;
             }

@@ -315,11 +315,11 @@ public class Metadata implements Closeable {
 
         String newClusterId = cache.cluster().clusterResource().clusterId();
         if (!Objects.equals(previousClusterId, newClusterId)) {
-            log.info("Cluster ID: {}", newClusterId);
+            log.warn("Cluster ID: {}", newClusterId);
         }
         clusterResourceListeners.onUpdate(cache.cluster().clusterResource());
 
-        log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+        log.warn("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
     }
 
     private boolean validateCluster(String newClusterId) {
