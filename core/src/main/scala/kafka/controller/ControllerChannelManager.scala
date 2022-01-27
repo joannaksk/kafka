@@ -270,7 +270,7 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
       def value: Long =
         if (latestRequestStatus.isInFlight || latestRequestStatus.isInQueue) time.milliseconds() - latestRequestStatus.enqueueTimeMs
         else 0
-    },
+    }
   )
 
   def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
