@@ -249,7 +249,7 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
 
   logIdent = s"[RequestSendThread controllerId=$controllerId] "
 
-  private val QueueTimeMetricName = "QueueTime"
+  private val MaxRequestAgeMetricName = "maxRequestAge"
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
@@ -265,7 +265,7 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
   //         the age of the oldest item in the queue, which is the one that should be dequeued next.
   // Case 3: if there is no inflight request and there are no requests inside the queue, the metric should report 0.
   val queueTimeGauge = newGauge(
-    QueueTimeMetricName,
+    MaxRequestAgeMetricName,
     new Gauge[Long] {
       def value: Long =
         if (latestRequestStatus.isInFlight || latestRequestStatus.isInQueue) time.milliseconds() - latestRequestStatus.enqueueTimeMs
@@ -435,6 +435,7 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
   override def initiateShutdown(): Boolean = {
     if (super.initiateShutdown()) {
       networkClient.initiateClose()
+      removeMetric(MaxRequestAgeMetricName)
       true
     } else
       false
