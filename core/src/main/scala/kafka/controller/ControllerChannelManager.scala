@@ -271,8 +271,10 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
         if (latestRequestStatus.isInFlight || latestRequestStatus.isInQueue) time.milliseconds() - latestRequestStatus.enqueueTimeMs
         else 0
     },
-    Map("broker-id" -> brokerNode.id.toString)
+    brokerMetricTags(brokerNode.id())
   )
+
+  private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
 
   def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
@@ -436,7 +438,7 @@ extends ShutdownableThread(name = name) with KafkaMetricsGroup {
   override def initiateShutdown(): Boolean = {
     if (super.initiateShutdown()) {
       networkClient.initiateClose()
-      removeMetric(MaxRequestAgeMetricName)
+      removeMetric(MaxRequestAgeMetricName, brokerMetricTags(brokerNode.id()))
       true
     } else
       false
