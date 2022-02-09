@@ -84,7 +84,7 @@ object LiDecomposedControlRequestUtils {
         else throw new IllegalStateException("The inter.broker.protocol.version config should not be smaller than 2.4-IV1")
 
       Some(new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, request.controllerId(), request.controllerEpoch(), request.brokerEpoch(),
-        request.maxBrokerEpoch(), effectivePartitionStates, liveBrokers).build())
+        request.maxBrokerEpoch(), effectivePartitionStates, liveBrokers, "FIXME (LIKAFKA-41423) federation+LCCR not yet supported").build())
     }
   }
 

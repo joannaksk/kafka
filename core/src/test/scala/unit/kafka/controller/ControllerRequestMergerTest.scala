@@ -154,11 +154,11 @@ class ControllerRequestMergerTest {
   def testMergingDifferentUpdateMetadataPartitions(): Unit = {
     val partitionStates1 = getUpdateMetadataPartitionStates(topic, 0)
     val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates1.asJava, updateMetadataLiveBrokers)
+      partitionStates1.asJava, updateMetadataLiveBrokers, "fakeClusterId")
 
     val partitionStates2 = getUpdateMetadataPartitionStates(topic, 1)
     val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates2.asJava, updateMetadataLiveBrokers)
+      partitionStates2.asJava, updateMetadataLiveBrokers, "fakeClusterId")
 
     val transformedPartitionStates = (partitionStates1 ++ partitionStates2).map{partitionState =>
       LiCombinedControlTransformer.transformUpdateMetadataPartition(partitionState)
@@ -178,11 +178,11 @@ class ControllerRequestMergerTest {
   def testSupersedingUpdateMetadataPartitionStates(): Unit = {
     val partitionStates1 = getUpdateMetadataPartitionStates(topic, 0)
     val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates1.asJava, updateMetadataLiveBrokers)
+      partitionStates1.asJava, updateMetadataLiveBrokers, "fakeClusterId")
 
     val partitionStates2 = getUpdateMetadataPartitionStates(topic, 0)
     val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates2.asJava, updateMetadataLiveBrokers)
+      partitionStates2.asJava, updateMetadataLiveBrokers, "fakeClusterId")
 
     val transformedPartitionStates = partitionStates2.map{partitionState =>
       LiCombinedControlTransformer.transformUpdateMetadataPartition(partitionState)

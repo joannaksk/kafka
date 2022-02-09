@@ -107,7 +107,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava, "fakeClusterId").build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
@@ -252,7 +252,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava, "fakeClusterId").build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
@@ -310,7 +310,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava, "fakeClusterId").build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -384,7 +384,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava, "fakeClusterId").build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -449,7 +449,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, brokerEpoch, partitionStates.asJava,
-      brokers.asJava).build()
+      brokers.asJava, "fakeClusterId").build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
@@ -491,7 +491,7 @@ class MetadataCacheTest {
         .setReplicas(replicas))
       val version = ApiKeys.UPDATE_METADATA.latestVersion
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, brokerEpoch, partitionStates.asJava,
-        brokers.asJava).build()
+        brokers.asJava, "fakeClusterId").build()
       cache.updateMetadata(15, updateMetadataRequest)
     }
 

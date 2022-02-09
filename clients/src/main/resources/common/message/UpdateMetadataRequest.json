@@ -33,6 +33,12 @@
   "validVersions": "0-7",
   "flexibleVersions": "7+",
   "fields": [
+    { "name": "ClusterId", "type": "string", "versions": "7+", "nullableVersions": "7+", "default": "null",
+      "taggedVersions": "7+", "tag": 0, "ignorable": true,
+      "about": "The clusterId if known. In federated clusters, this is the ID of the originating physical cluster, i.e., it matches the included broker info." },
+    { "name": "RoutingClusterId", "type": "string", "versions": "7+", "nullableVersions": "7+", "default": "null",
+      "taggedVersions": "7+", "tag": 1, "ignorable": true,
+      "about": "The 'effective' or rewritten clusterId; for routing purposes, has precedence over ClusterId if present. In federated clusters, updates from other physical clusters must be modified by the local controller and then forwarded to local brokers, including to the broker half of the controller itself. This field allows the local controller to avoid infinite loops." },
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",

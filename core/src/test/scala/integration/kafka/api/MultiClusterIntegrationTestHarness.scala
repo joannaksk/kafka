@@ -123,25 +123,25 @@ abstract class MultiClusterIntegrationTestHarness extends MultiClusterKafkaServe
       clientSaslProperties)
   }
 
-  // TODO:  currently cluster 0 only
   def createProducer[K, V](keySerializer: Serializer[K] = new ByteArraySerializer,
                            valueSerializer: Serializer[V] = new ByteArraySerializer,
-                           configOverrides: Properties = new Properties): KafkaProducer[K, V] = {
+                           configOverrides: Properties = new Properties,
+                           clusterIndex: Int = 0): KafkaProducer[K, V] = {
     val props = new Properties
-    props ++= producerConfigs(0)
+    props ++= producerConfigs(clusterIndex)
     props ++= configOverrides
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
   }
 
-  // TODO:  currently cluster 0 only
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
                            configOverrides: Properties = new Properties,
-                           configsToRemove: List[String] = List()): KafkaConsumer[K, V] = {
+                           configsToRemove: List[String] = List(),
+                           clusterIndex: Int = 0): KafkaConsumer[K, V] = {
     val props = new Properties
-    props ++= consumerConfigs(0)
+    props ++= consumerConfigs(clusterIndex)
     props ++= configOverrides
     configsToRemove.foreach(props.remove(_))
     val consumer = new KafkaConsumer[K, V](props, keyDeserializer, valueDeserializer)
@@ -149,10 +149,10 @@ abstract class MultiClusterIntegrationTestHarness extends MultiClusterKafkaServe
     consumer
   }
 
-  // TODO:  currently cluster 0 only
-  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
+  def createAdminClient(configOverrides: Properties = new Properties,
+                        clusterIndex: Int = 0): Admin = {
     val props = new Properties
-    props ++= adminClientConfigs(0)
+    props ++= adminClientConfigs(clusterIndex)
     props ++= configOverrides
     val adminClient = AdminClient.create(props)
     adminClients += adminClient
@@ -161,7 +161,6 @@ abstract class MultiClusterIntegrationTestHarness extends MultiClusterKafkaServe
 
   @After
   override def tearDown(): Unit = {
-    // TODO:  figure out how want to store and shut down per-cluster clients
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))

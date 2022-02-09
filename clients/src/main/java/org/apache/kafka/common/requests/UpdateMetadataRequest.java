@@ -39,6 +39,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.Map;
 
 import static java.util.Collections.singletonList;
@@ -50,16 +51,19 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
+        private final String clusterId;
         private Lock buildLock = new ReentrantLock();
 
         // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
         private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
-                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers) {
+                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
+                       String clusterId) {
             super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
+            this.clusterId = clusterId;
         }
 
         @Override
@@ -102,6 +106,12 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setTopicStates(new ArrayList<>(topicStatesMap.values()));
             } else {
                 data.setUngroupedPartitionStates(partitionStates);
+            }
+
+            // clusterId == null implies federation is not enabled (though reverse may not be true):  no point in
+            // wasting space on an unused field (TODO? could make it unconditional if useful for debugging purposes)
+            if (version >= 7 && clusterId != null) {
+                data.setClusterId(clusterId);
             }
 
             updateMetadataRequest = new UpdateMetadataRequest(data, version);
@@ -155,6 +165,32 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         public List<UpdateMetadataBroker> liveBrokers() {
             return liveBrokers;
+        }
+    }
+
+    /**
+     * Dummy "builder" that simply wraps an already-built UpdateMetadataRequest.  This is needed in order to
+     * support submission of rewritten remote requests (i.e., from controllers in other physical clusters in
+     * a federated setup) to the broker-queues in this controller's cluster.
+     */
+    public static class WrappingBuilder extends Builder {
+        private final UpdateMetadataRequest updateMetadataRequest;
+
+        public WrappingBuilder(UpdateMetadataRequest umr) {
+            super(umr.version(), umr.controllerId(), umr.controllerEpoch(), umr.brokerEpoch(), umr.maxBrokerEpoch(),
+                toList(umr.partitionStates()), umr.liveBrokers(), umr.clusterId());
+            this.updateMetadataRequest = umr;
+        }
+
+        @Override
+        public UpdateMetadataRequest build(short version) {
+            return updateMetadataRequest;
+        }
+
+        private static <T> List<T> toList(Iterable<T> iterable) {
+            List<T> list = new LinkedList<>();
+            iterable.forEach(list::add);
+            return list;
         }
     }
 
@@ -212,6 +248,16 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public UpdateMetadataRequest(Struct struct, short version) {
         this(new UpdateMetadataRequestData(struct, version), version);
+    }
+
+    // federation
+    public String clusterId() {
+        return data.clusterId();
+    }
+
+    // federation
+    public String routingClusterId() {
+        return data.routingClusterId();
     }
 
     @Override
@@ -278,6 +324,25 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         struct = data.toStruct(version());
         }
         return struct;
+        } finally {
+            structLock.unlock();
+        }
+    }
+
+    // federation
+    public void rewriteRemoteRequest(String routingClusterId, int controllerId, int controllerEpoch, long maxBrokerEpoch) {
+        // FIXME?  should we add a version check for 7+?  federation should not be enabled with less than that...
+        structLock.lock();
+        try {
+            data.setRoutingClusterId(routingClusterId);
+            data.setControllerId(controllerId);
+            data.setControllerEpoch(controllerEpoch);
+            // brokerEpoch apparently gets rewritten by the controller for every receiving broker (somewhere...):
+            // shouldn't need to mess with it here, right?  or should we remove it in the version >= 6 case?  FIXME?
+            if (version() >= 6) {
+                data.setMaxBrokerEpoch(maxBrokerEpoch);
+            }
+            struct = null;  // invalidate cache (in case it's there)
         } finally {
             structLock.unlock();
         }

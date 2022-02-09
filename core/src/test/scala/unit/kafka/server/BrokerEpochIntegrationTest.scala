@@ -123,7 +123,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
     val metrics = new Metrics
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
+      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None), "someClusterId")
     controllerChannelManager.startup()
 
     val broker2 = servers(brokerId2)
@@ -189,7 +189,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
           epochInRequest, epochInRequest,
-          partitionStates.asJava, liveBrokers.asJava)
+          partitionStates.asJava, liveBrokers.asJava, "fakeClusterId")
 
         if (isEpochInRequestStale) {
           sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)

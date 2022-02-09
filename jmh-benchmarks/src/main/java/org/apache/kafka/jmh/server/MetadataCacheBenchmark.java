@@ -63,7 +63,7 @@ public class MetadataCacheBenchmark {
         public void setUp() {
             UpdateMetadataRequest request =
                 new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(), 2, 1, 0, 0,
-                    getPartitionStates(), getUpdateMetadataBroker()).build();
+                    getPartitionStates(), getUpdateMetadataBroker(), "dummyClusterId").build();
             metadataCache.updateMetadata(15, request);
         }
 
@@ -130,7 +130,7 @@ public class MetadataCacheBenchmark {
             return result;
         }
 
-        public final MetadataCache metadataCache = new MetadataCache(BROKER_ID);
+        public final MetadataCache metadataCache = new MetadataCache(BROKER_ID, "dummyClusterId", false);
         public final ListenerName listenerName = ListenerName.normalised("PLAINTEXT");
         public final scala.collection.Set<String> topicScalaSetInQuery =
             JavaConverters.asScalaSet(Collections.singleton(TOPIC_NAME));

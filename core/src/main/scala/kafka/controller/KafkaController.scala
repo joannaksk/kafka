@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.api._
+import kafka.cluster.Broker
 import kafka.common._
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
@@ -28,13 +29,12 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ElectionType, KafkaException, TopicPartition, Node}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, NotEnoughReplicasException, PolicyViolationException, StaleBrokerEpochException}
+import org.apache.kafka.common.message.UpdateMetadataResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataResponse}
+import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -71,8 +71,12 @@ object KafkaController extends Logging {
             // Use min size of all replica lists as a stand in for replicationFactor. Generally replicas sizes should be
             // the same, but minBy gets us the worst case.
             val replicationFactor = partitionsAssignment.minBy(_._2.replicas.size)._2.replicas.size.toShort
+//GRR FIXME:  hitting validation error here (maybe?), not clear why...unless we're missing some cross-cluster metadata?
+//GRR FIXME2:  do we still need this, or is it fixed?  haven't seen problem here in a while...but also not seeing logs, so how did we trigger this in first place? [first added logs on 20211221...] [hmmm, no captured logs with these debug stmts, but seems like might have been due to failure to clear batch after processing it, which was fixed long ago]
+            info(s"GRR DEBUG:  satisfiesLiCreateTopicPolicy(): about to call validate()")
             policy.validate(new CreateTopicPolicy.RequestMetadata(topic, partitionsAssignment.size, replicationFactor,
               jPartitionAssignment.asJava, new java.util.HashMap[String, String]()))
+            info(s"GRR DEBUG:  satisfiesLiCreateTopicPolicy(): done with validate()")
           }
           true
         case None =>
@@ -96,6 +100,7 @@ class KafkaController(val config: KafkaConfig,
                       initialBrokerInfo: BrokerInfo,
                       initialBrokerEpoch: Long,
                       tokenManager: DelegationTokenManager,
+                      clusterId: String,
                       threadNamePrefix: Option[String] = None)
   extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
 
@@ -108,7 +113,7 @@ class KafkaController(val config: KafkaConfig,
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
-    stateChangeLogger, threadNamePrefix)
+    stateChangeLogger, clusterId, threadNamePrefix)
 
   // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
   // visible for testing
@@ -118,12 +123,12 @@ class KafkaController(val config: KafkaConfig,
   private[controller] val eventManager = new ControllerEventManager(config.brokerId, this, time,
     controllerContext.stats.rateAndTimeMetrics)
 
-  private val brokerRequestBatch = new ControllerBrokerRequestBatch(config, controllerChannelManager,
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(config, clusterId, controllerChannelManager,
     eventManager, controllerContext, stateChangeLogger)
   val replicaStateMachine: ReplicaStateMachine = new ZkReplicaStateMachine(config, stateChangeLogger, controllerContext, zkClient,
-    new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
+    new ControllerBrokerRequestBatch(config, clusterId, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val partitionStateMachine: PartitionStateMachine = new ZkPartitionStateMachine(config, stateChangeLogger, controllerContext, zkClient,
-    new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
+    new ControllerBrokerRequestBatch(config, clusterId, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
     partitionStateMachine, new ControllerDeletionClient(this, zkClient))
 
@@ -305,6 +310,111 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(skipControlledShutdownEvent)
   }
 
+
+  /**
+   * [Federation only] Get the Node struct (basic connection details) for the specified broker ID.
+   * This is provided to a <em>remote</em> controller so it can send its cluster updates to us.
+   */
+  // [might be a test-only method; will depend on how "real" configuration/discovery/recovery works out]
+  def getBrokerNode(brokerId: Int): Option[Node] = controllerChannelManager.getBrokerNode(brokerId)
+
+
+  /**
+   * [Federation only] Add the specified broker as a remote controller, i.e., a target for local
+   * metadata updates but not for rewritten remote ones.  Loosely speaking, this is the other side
+   * of getBrokerNode(), i.e., this is what the other side does when it receives getBrokerNode()
+   * info from another controller.  Note that there is no inverse:  once added, a remote controller
+   * stays added until <em>this</em> broker bounces.  [Might change once the full remote-ZK watcher
+   * implementation exists?]
+   */
+  // [currently a test-only method, but likely to be used with "real" configuration/discovery/recovery as well]
+  //GRR TEMP:  replace this with a "just in time" or at least "frequently refreshed" variant once we
+  // have the remote-ZK watcher variant (analogous to processIsrChangeNotification() far, far below)
+  def addRemoteController(broker: Broker): Unit = {
+    controllerChannelManager.addRemoteController(broker)
+    controllerContext.addRemoteControllers(Set(broker.id))
+  }
+
+
+  /**
+   * Invoked by doHandleUpdateMetadataRequest() in KafkaApis when the request is NOT locally sourced (i.e.,
+   * neither a native, ZK-originated update nor an already rewritten remote one that's ready for local
+   * distribution).  In other words, the request is fresh off the boat from a remote controller, and we
+   * need to sanity-check it, rewrite it, and submit it (or resubmit it, in our own case) to all outgoing
+   * local-broker queues.
+   */
+  def rewriteAndForwardRemoteUpdateMetadataRequest(umr: UpdateMetadataRequest): UpdateMetadataResponse = {
+
+    // Upstream caller has already verified that clusterId doesn't match our own AND routingClusterId doesn't match
+    // (null or mismatch), i.e., this is a remote, incoming request (or a bug...).
+
+    // OPERABILITY TODO (longer-term):  would be good to associate a (persistent) color with each physical cluster
+    // and include it in logging (and probably also in some znode) => more human-memorable than random UUID strings
+    // [maybe do same thing for federation overall => refuse to talk to remote controller if federation-color (or
+    //  flavor/fruit/star/name/etc.) doesn't match own:  useful sanity check]
+
+    info(s"GRR DEBUG: controller for clusterId=${clusterId} has received a remote, non-rewritten UpdateMetadataRequest "
+        + s"(UMR clusterId=${umr.clusterId}, routingClusterId=${umr.routingClusterId}), and li.federation.enable="
+        + s"${config.liFederationEnable}: about to validate and rewrite it")
+
+    if (!config.liFederationEnable) {
+      // GRR TODO:  increment some (new?) error metric
+      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
+      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
+      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.clusterId} " +
+        s"with routingClusterId=${umr.routingClusterId}, but li.federation.enable=${config.liFederationEnable}")
+    }
+
+    if (umr.routingClusterId != null && umr.routingClusterId != clusterId) {
+      // GRR TODO:  increment some (new?) error metric
+      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
+      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
+      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.clusterId}, " +
+        s"but routingClusterId=${umr.routingClusterId} does not match us (clusterId=${clusterId})")
+    }
+    // upstream already handled routingClusterId == clusterId case, so at this point we know routingClusterId == null
+    // and we can safely rewrite it
+
+    // GRR FIXME:  should we refresh the preferred-controller list first?  presumably it's latency-expensive...
+    //controllerContext.setLivePreferredControllerIds(zkClient.getPreferredControllerList.toSet)
+    if (!config.preferredController) {
+      // GRR TODO:  increment some (new?) error metric
+      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
+      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
+      throw new IllegalStateException(s"Received UpdateMetadataRequest from clusterId=${umr.clusterId} " +
+        s"(we're clusterId=${clusterId}), but we're not a preferred controller")
+    }
+
+    // At this point we know routingClusterId == null and we're a controller node (maybe not leader, but preferred).
+    // Both leaders and inactive preferred controllers (i.e., everybody who receives this request) need to cache
+    // the remote data (in "firewalled" data structures) in order to serve it but not otherwise act on it.
+
+//GRR WORKING:
+// GRR TODO:  cache metadata in some new data structures for remote physical clusters' info:  FIGURE OUT WHAT KIND
+// [huh...not seeing any such data structures in this class...all buried within ChannelMgr or EventMgr?]
+// [ChannelMgr has brokerStateInfo hashmap...all brokers, keyed by brokerId (NEEDS brokerLock!)]
+
+    // FIXME?  is there a isActive race condition here such that a remote request could get dropped if
+    //   a non-active/leader controller becomes the leader right around the time both old and new leaders
+    //   are checking this conditional?
+    if (isActive) {  // rewrite request and stuff it back into "the queue" (whatever/wherever that is)
+      // rewrite request (in place)
+      umr.rewriteRemoteRequest(
+          clusterId,
+          brokerInfo.broker.id,    // Lucas:  this is our own controllerId, right?
+          controllerContext.epoch, // Lucas:  this is our own controllerEpoch, right?
+          controllerContext.maxBrokerEpoch)
+
+      // resubmit request to local-broker queues ONLY (NOT to remote controllers)
+      info("Sending rewritten remote update metadata request to local brokers") // " from ..." GRR FIXME
+      val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
+      sendRemoteUpdateMetadataRequest(liveBrokers, umr)
+    }
+    // GRR:  no "else" case (non-leader-specific code) as far as I know
+
+    new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code))
+  }
+
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
     zkClient.updateBrokerInfo(newBrokerInfo)
@@ -402,6 +512,7 @@ class KafkaController(val config: KafkaConfig,
   /**
    * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
    * required to clean up internal controller data structures
+   * [FIXME?  also called unilaterally by KafkaServer main thread, and NOT thread-safe...]
    */
   private def onControllerResignation(): Unit = {
     debug("Resigning")
@@ -1165,8 +1276,9 @@ class KafkaController(val config: KafkaConfig,
 
   /**
    * Send the leader information for selected partitions to selected brokers so that they can correctly respond to
-   * metadata requests
+   * metadata requests.
    *
+   * @param partitions The topic-partitions whose metadata should be sent
    * @param brokers The brokers that the update metadata request should be sent to
    */
   private[controller] def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicPartition]): Unit = {
@@ -1176,6 +1288,24 @@ class KafkaController(val config: KafkaConfig,
       brokerRequestBatch.sendRequestsToBrokers(epoch)
     } catch {
       case e: IllegalStateException =>
+        handleIllegalState(e)
+    }
+  }
+
+  /**
+   * [Federation only] Send the topic-partition metadata from a remote physical cluster to all of our brokers so
+   * they can correctly respond to metadata requests for the entire federation.
+   *
+   * @param brokers The brokers that the update metadata request should be sent to
+   * @param umr     The (rewritten) remote update metadata request itself
+   */
+  private[controller] def sendRemoteUpdateMetadataRequest(brokers: Seq[Int], umr: UpdateMetadataRequest): Unit = {
+    try {
+      brokerRequestBatch.newBatch()   // [GRR:  this is a do-nothing (other than throwing exceptions) sanity checker]
+      brokerRequestBatch.sendRemoteRequestToBrokers(brokers, umr)
+    } catch {
+      case e: IllegalStateException =>
+        info(s"GRR DEBUG:  sendRemoteUpdateMetadataRequest(): caught exception while sanity-checking for new batch or forwarding remote request to local brokers", e)
         handleIllegalState(e)
     }
   }

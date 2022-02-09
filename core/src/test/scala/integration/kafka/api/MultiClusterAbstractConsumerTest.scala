@@ -85,8 +85,14 @@ abstract class MultiClusterAbstractConsumerTest extends MultiClusterBaseRequestT
     }
 
     // create the test topics
-    createTopic(topicNameCluster0, numPartitions = 2, replicaCount, clusterIndex = 0)
-    createTopic(topicNameCluster1, 1, replicaCount, clusterIndex = 1)  // single-partition topic in 2nd cluster for simplicity
+    // GRR FIXME:  DISABLED for now:  instead, create both topics explicitly within test case itself
+    //             since we're called before federation interconnects are set up
+    // GRR TODO:  figure out overridable setUp() sequence that allows these two to be created AFTER
+    //            federation mode (if enabled) is ready (currently getting killed because super.setUp()
+    //            in TEST is called before federation setup happens...so maybe fixing it there is
+    //            solution?  hmmm...)
+    //createTopic(topicNameCluster0, numPartitions = 2, replicaCount, clusterIndex = 0)
+    //createTopic(topicNameCluster1, 1, replicaCount, clusterIndex = 1)  // single-partition topic in 2nd cluster for simplicity
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {

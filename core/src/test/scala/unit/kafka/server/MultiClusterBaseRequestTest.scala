@@ -38,6 +38,33 @@ abstract class MultiClusterBaseRequestTest extends MultiClusterIntegrationTestHa
   // If required, override properties by mutating the passed Properties object
   protected def brokerPropertyOverrides(properties: Properties): Unit = {}
 
+  // FIXME:  BUG in original commit (cc4fde35c9cc2818af1bcb6861ce32dee0f41677) for original class
+  // (BaseRequestTest) from which this one was copied:  does NOT call super.modifyConfigs() =>
+  // throwing away IntegrationTestHarness's version => neither setting up listeners nor adding
+  // serverConfig => rendering all tests that override serverConfig as (partly) broken:
+  //    core/src/test/scala/integration/kafka/api/BaseQuotaTest.scala
+  //    core/src/test/scala/integration/kafka/api/ClientIdQuotaTest.scala
+  //    core/src/test/scala/integration/kafka/api/ConsumerTopicCreationTest.scala
+  //    core/src/test/scala/integration/kafka/api/DelegationTokenEndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/DescribeAuthorizedOperationsTest.scala
+  //    core/src/test/scala/integration/kafka/api/EndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/EndToEndClusterIdTest.scala
+  //    core/src/test/scala/integration/kafka/api/GroupEndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/MetricsTest.scala
+  //    core/src/test/scala/integration/kafka/api/PlaintextEndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslClientsWithInvalidCredentialsTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslMultiMechanismConsumerTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslPlainPlaintextConsumerTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslPlainSslEndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslSslAdminIntegrationTest.scala
+  //    core/src/test/scala/integration/kafka/api/SaslSslConsumerTest.scala
+  //    core/src/test/scala/integration/kafka/api/SslAdminIntegrationTest.scala
+  //    core/src/test/scala/integration/kafka/api/SslEndToEndAuthorizationTest.scala
+  //    core/src/test/scala/integration/kafka/api/UserClientIdQuotaTest.scala
+  //    core/src/test/scala/integration/kafka/api/UserQuotaTest.scala
+  //    core/src/test/scala/integration/kafka/api/CustomQuotaCallbackTest.scala
+  //    core/src/test/scala/integration/kafka/api/ProxyBasedFederationTest.scala
+  //    core/src/test/scala/unit/kafka/server/LogDirFailureTest.scala
   override def modifyConfigs(props: Seq[Properties], clusterIndex: Int): Unit = {
     super.modifyConfigs(props, clusterIndex)
     props.foreach { p =>

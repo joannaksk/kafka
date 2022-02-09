@@ -1355,7 +1355,7 @@ public class RequestResponseTest {
                 .setRack(rack)
         );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, 0, partitionStates,
-            liveBrokers).build();
+            liveBrokers, "dummyClusterId").build();
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {

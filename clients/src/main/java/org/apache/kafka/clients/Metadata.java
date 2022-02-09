@@ -315,7 +315,7 @@ public class Metadata implements Closeable {
 
         String newClusterId = cache.cluster().clusterResource().clusterId();
         if (!Objects.equals(previousClusterId, newClusterId)) {
-            log.info("Cluster ID: {}", newClusterId);
+            log.info("Cluster ID = {}", newClusterId);
         }
         clusterResourceListeners.onUpdate(cache.cluster().clusterResource());
 

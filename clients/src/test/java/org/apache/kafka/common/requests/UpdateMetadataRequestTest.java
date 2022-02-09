@@ -53,7 +53,7 @@ public class UpdateMetadataRequestTest {
     public void testUnsupportedVersion() {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
                 (short) (UPDATE_METADATA.latestVersion() + 1), 0, 0, 0, 0,
-                Collections.emptyList(), Collections.emptyList());
+                Collections.emptyList(), Collections.emptyList(), "dummyClusterId");
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -61,7 +61,7 @@ public class UpdateMetadataRequestTest {
     public void testGetErrorResponse() {
         for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                    version, 0, 0, 0, 0, Collections.emptyList(), Collections.emptyList());
+                    version, 0, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), "dummyClusterId");
             UpdateMetadataRequest request = builder.build();
             UpdateMetadataResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -149,7 +149,7 @@ public class UpdateMetadataRequestTest {
             );
 
             UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3, 3,
-                partitionStates, liveBrokers).build();
+                partitionStates, liveBrokers, "dummyClusterId").build();
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(request.partitionStates()));
             assertEquals(liveBrokers, request.liveBrokers());
@@ -201,7 +201,7 @@ public class UpdateMetadataRequestTest {
                 .setPartitionIndex(tp.partition()));
         }
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0, 0,
-                partitionStates, Collections.emptyList());
+                partitionStates, Collections.emptyList(), "dummyClusterId");
 
         assertTrue(MessageTestUtil.messageSize(builder.build((short) 5).data(), (short) 5) <
             MessageTestUtil.messageSize(builder.build((short) 4).data(), (short) 4));

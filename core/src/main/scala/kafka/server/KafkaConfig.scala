@@ -293,6 +293,7 @@ object Defaults {
   /** Linkedin Internal states */
   val LiCombinedControlRequestEnabled = false
   val LiAsyncFetcherEnabled = false
+  val LiFederationEnabled = false
 }
 
 object KafkaConfig {
@@ -388,6 +389,7 @@ object KafkaConfig {
   val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
   val UnofficialClientCacheTtlProp = "unofficial.client.cache.ttl"
   val ExpectedClientSoftwareNamesProp = "expected.client.software.names"
+  val LiFederationEnableProp = "li.federation.enable" // GRR
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -692,6 +694,7 @@ object KafkaConfig {
   val UnofficialClientLoggingEnableDoc = "Controls whether logging occurs when an ApiVersionsRequest is received from a client unsupported by LinkedIn, such as an Apache Kafka client."
   val UnofficialClientCacheTtlDoc = "The amount of time (in hours) for the identity of an unofficial client to live in the local cache to avoid duplicate log messages."
   val ExpectedClientSoftwareNamesDoc = "The software names of clients that are supported by LinkedIn, such as Avro, Raw, and Tracking clients."
+  val LiFederationEnableDoc = "Specifies whether multiple physical clusters should be combined into one federated (logical) cluster." // GRR FIXME: still need a config or runtime mechanism to identify which clusters are federated and to enable them to find and talk to each other
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
@@ -1099,6 +1102,7 @@ object KafkaConfig {
       .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, UnofficialClientLoggingEnableDoc)
       .define(UnofficialClientCacheTtlProp, LONG, Defaults.UnofficialClientCacheTtl, LOW, UnofficialClientCacheTtlDoc)
       .define(ExpectedClientSoftwareNamesProp, LIST, Defaults.ExpectedClientSoftwareNames, LOW, ExpectedClientSoftwareNamesDoc)
+      .define(LiFederationEnableProp, BOOLEAN, Defaults.LiFederationEnabled, HIGH, LiFederationEnableDoc) // GRR
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1500,6 +1504,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
   def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
+  // GRR:  what decides "val" vs. "var" vs. "def" for these things?  overrides?  (when would that make sense?)
+  def liFederationEnable = getBoolean(KafkaConfig.LiFederationEnableProp)
 
   def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)
   def unofficialClientCacheTtl = getLong(KafkaConfig.UnofficialClientCacheTtlProp)

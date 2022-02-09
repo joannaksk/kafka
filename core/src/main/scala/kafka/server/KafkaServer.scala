@@ -293,7 +293,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
         logManager.startup()
 
-        metadataCache = new MetadataCache(config.brokerId)
+        metadataCache = new MetadataCache(config.brokerId, clusterId, config.liFederationEnable)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
         // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -330,7 +330,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         tokenManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, clusterId, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient, kafkaController)
@@ -695,6 +695,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (dataPlaneRequestProcessor != null)
           CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
+//APPARENT BUG:  should loop over controlPlaneRequestHandlerPool and close all of them, right?
+// (socketServer.controlPlaneRequestChannelOpt.foreach ...)
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
         CoreUtils.swallow(authorizer.foreach(_.close()), this)
@@ -764,6 +766,35 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   def getLogManager(): LogManager = logManager
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
+
+  /**
+   * [Federation only] Get the Node struct (basic connection details) for the specified broker ID.
+   * This is provided to a <em>remote</em> controller so it can send its cluster updates to us.
+   */
+  // [might be a test-only method; will depend on how "real" configuration/discovery/recovery works out]
+  def getBrokerNode(brokerId: Int): Option[Node] = {
+    if (kafkaController != null) {
+      kafkaController.getBrokerNode(brokerId)
+    } else {
+      warn(s"GRR DEBUG:  cannot look up broker Node info because controller is null?!?")
+      None
+    }
+  }
+
+  /**
+   * [Federation only] Add the specified broker as a remote controller, i.e., a target for local
+   * metadata updates but not for rewritten remote ones.  Loosely speaking, this is the other side
+   * of getBrokerNode(), i.e., this is what the other side does when it receives getBrokerNode()
+   * info from another controller.
+   */
+  // [might be a test-only method; will depend on how "real" configuration/discovery/recovery works out]
+  def addRemoteController(broker: Broker): Unit = {
+    if (kafkaController != null) {
+      kafkaController.addRemoteController(broker)
+    } else {
+      warn(s"GRR DEBUG:  cannot add remote controller ${broker} to null local controller!")
+    }
+  }
 
   /**
    * Reads the BrokerMetadata. If the BrokerMetadata doesn't match in all the log.dirs, InconsistentBrokerMetadataException is

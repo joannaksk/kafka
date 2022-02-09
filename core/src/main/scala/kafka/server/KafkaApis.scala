@@ -102,7 +102,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val quotas: QuotaManagers,
                 val fetchManager: FetchManager,
                 brokerTopicStats: BrokerTopicStats,
-                val clusterId: String,
+                val clusterId: String,  // GRR FIXME:  any guarantee this is non-null?
                 time: Time,
                 val tokenManager: DelegationTokenManager) extends Logging {
 
@@ -132,6 +132,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+//    info(s"GRR DEBUG (TEMPORARY): Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
+//      s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
@@ -220,6 +222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  // FIXME?  request arg is NOT USED
   private def doHandleLeaderAndIsrRequest(request: RequestChannel.Request, correlationId: Int, leaderAndIsrRequest: LeaderAndIsrRequest): LeaderAndIsrResponse = {
     def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition]): Unit = {
       // for each new leader or follower, call coordinator to handle consumer group migration.
@@ -262,6 +265,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  // FIXME?  request arg is NOT USED
   private def doHandleStopReplicaRequest(request: RequestChannel.Request, stopReplicaRequest: StopReplicaRequest): StopReplicaResponse = {
     val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
     // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
@@ -293,6 +297,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
     authorizeClusterOperation(request, CLUSTER_ACTION)
+    // GRR FIXME:  not 100% clear whether staleness criterion should apply to updates coming from other physical
+    //   clusters, but based on KIP-380 description, seems like we probably do need it in order to deal with same
+    //   problems KIP-380 was intended to solve (i.e., "cluster A" controller bounce around same time as "cluster
+    //   B" remote UpdateMetadataRequest); also implies that local controllers must track brokerEpochs of remote
+    //   controllers
+    //   (separate question is why check isn't needed by LI's combined control request, which skips directly to
+    //   doHandleUpdateMetadataRequest():  probable BUG)
     if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch, updateMetadataRequest.maxBrokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
@@ -307,7 +318,24 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  // [unlike the other "doHandle..." methods, this one DOES use the request arg]
   private def doHandleUpdateMetadataRequest(request: RequestChannel.Request, correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): UpdateMetadataResponse = {
+
+    // Since handleLiCombinedControlRequest() calls us directly (bypassing handleUpdateMetadataRequest() and its
+    // stale broker-epoch check), this seems like the most appropriate place for the new federation "router" to
+    // live [GRR]:  rest of (original) method is the legacy "broker half" logic.
+    if (!config.liFederationEnable || clusterId.equals(updateMetadataRequest.clusterId) || clusterId.equals(updateMetadataRequest.routingClusterId)) {
+      // This is either a local/legacy/non-federated request (from our ZK => clusterId matches) or one our controller
+      // has already rewritten (received from a remote controller => routingClusterId matches), so do the normal,
+      // broker-half processing below.
+//    info(s"GRR DEBUG:  brokerId=${brokerId} received updateMetadataRequest: controllerId=${updateMetadataRequest.controllerId}, clusterId=${updateMetadataRequest.clusterId}, routingClusterId=${updateMetadataRequest.routingClusterId}")
+      if (updateMetadataRequest.clusterId != null && clusterId.equals(updateMetadataRequest.routingClusterId)) {
+        info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received rewritten updateMetadataRequest from remote clusterId=${updateMetadataRequest.clusterId}")
+      }
+      // [The following block is NOT properly indented in order to simplify upstream merges.]
+
+
+    info(s"GRR DEBUG:  brokerId=${brokerId} calling maybeUpdateMetadataCache() with correlationId=${correlationId} and updateMetadataRequest from clusterId=${updateMetadataRequest.clusterId}")
     val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
     if (deletedPartitions.nonEmpty)
       groupCoordinator.handleDeletedPartitions(deletedPartitions)
@@ -318,6 +346,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     quotas.clientQuotaCallback.foreach { callback =>
+      // GRR FIXME:  clusterId arg in here is probably wrong for remote UMRs, but need to see what
+      //   callback.updateClusterMetadata() actually does with it
       if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
         quotas.fetch.updateQuotaMetricConfigs()
         quotas.produce.updateQuotaMetricConfigs()
@@ -331,6 +361,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code))
+
+
+
+    } else {
+      // [Federation only.] This is an incoming remote request (i.e., from another physical cluster in the federation),
+      // so hand it off to our controller half for validation, rewriting, and rerouting.
+      info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received new updateMetadataRequest from remote controllerId=${updateMetadataRequest.controllerId} in clusterId=${updateMetadataRequest.clusterId}; sending to controller for validation and rewrite")
+      controller.rewriteAndForwardRemoteUpdateMetadataRequest(updateMetadataRequest) // modifies UMR in place, returns response
+      // same method ^^^ stuffs the rewritten UMR into the processing queue, which lives in controller's
+      // ControllerEventManager (KafkaController's eventManager member var)
+    }
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
@@ -3118,6 +3159,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseData = new LiCombinedControlResponseData()
 
     decomposedRequest.leaderAndIsrRequest match {
+      // GRR FIXME:  this code path skips the "stale broker epoch" check that the main path (through
+      //   handleLeaderAndIsrRequest()) makes:  BUG? (seems like it) (maybe intention was to add single
+      //   stale-epoch check in handleLiCombinedControlRequest(), but forgot to do so?)
+      //   [separate question:  why was LAIR's top-level BrokerEpoch moved into LCCR's LeaderAndIsrPartitionState
+      //    struct?  why is MaxBrokerEpoch missing?  is LCCR out of date?]
       case Some(leaderAndIsrRequest) => {
         val leaderAndIsrResponse = doHandleLeaderAndIsrRequest(request, correlationId, leaderAndIsrRequest)
         responseData.setLeaderAndIsrErrorCode(leaderAndIsrResponse.errorCode())
@@ -3127,6 +3173,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     decomposedRequest.updateMetadataRequest match {
+      // GRR FIXME:  this code path skips the "stale broker epoch" check that the main path (through
+      //   handleUpdateMetadataRequest()) makes:  BUG? (seems like it)
+      //   [separate question:  why was UMR's top-level BrokerEpoch not copied to LCCR?]
       case Some(updateMetadataRequest) => {
         val updateMetadataResponse = doHandleUpdateMetadataRequest(request, correlationId, updateMetadataRequest)
         responseData.setUpdateMetadataErrorCode(updateMetadataResponse.errorCode())
@@ -3137,6 +3186,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val stopReplicaRequests = decomposedRequest.stopReplicaRequests
     val stopReplicaPartitionErrors = new util.ArrayList[StopReplicaPartitionError]()
     stopReplicaRequests.foreach{ stopReplicaRequest => {
+      // GRR FIXME:  this code path skips the "stale broker epoch" check that the main path (through
+      //   handleStopReplicaRequest()) makes:  BUG? (seems like it)
       val stopReplicaResponse = doHandleStopReplicaRequest(request, stopReplicaRequest)
       responseData.setStopReplicaErrorCode(stopReplicaResponse.errorCode())
       stopReplicaPartitionErrors.addAll(LiCombinedControlTransformer.transformStopReplicaPartitionErrors(stopReplicaResponse.partitionErrors()))

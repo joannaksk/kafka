@@ -105,6 +105,9 @@ class ControllerContext {
 
   @volatile var livePreferredControllerIds: Set[Int] = Set.empty
 
+  // [Federation only]
+  val liveOrShuttingDownRemoteControllerIds = mutable.Set.empty[Int]
+
   private def clearTopicsState(): Unit = {
     allTopics = Set.empty
     partitionAssignments.clear()
@@ -204,6 +207,11 @@ class ControllerContext {
     livePreferredControllerIds = preferredControllerIds
   }
 
+  // [Federation only]
+  def addRemoteControllers(remoteControllerIds: Set[Int]): Unit = {
+    liveOrShuttingDownRemoteControllerIds ++= remoteControllerIds
+  }
+
   // getter
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.filter(b => b._2 > (shuttingDownBrokerIds.getOrElse(b._1, -1L))).keySet
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
@@ -213,6 +221,9 @@ class ControllerContext {
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
 
   def getLivePreferredControllerIds : Set[Int] = livePreferredControllerIds
+
+  // [Federation only]
+  def getLiveOrShuttingDownRemoteControllerIds : Set[Int] = liveOrShuttingDownRemoteControllerIds
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
