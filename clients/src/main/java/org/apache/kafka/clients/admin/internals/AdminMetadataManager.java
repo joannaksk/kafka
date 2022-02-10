@@ -100,6 +100,11 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return false;
+        }
+
+        @Override
         public void handleDisconnection(String destination) {
             // Do nothing
         }

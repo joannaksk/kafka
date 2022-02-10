@@ -242,6 +242,8 @@ public class ProducerConfig extends AbstractConfig {
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "The client-side (producer) permission to allow auto-topic creation. Both the client-side and the broker-side should enable auto-topic creation in order for a topic to be automatically created";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = false;
 
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = CommonClientConfigs.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
@@ -281,6 +283,12 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
+                                .define(LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG,
+                                        Type.LONG,
+                                        60 * 60 * 1000,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CommonClientConfigs.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

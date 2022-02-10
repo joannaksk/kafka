@@ -62,10 +62,13 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
+    private final TestClusterMetadataUpdater clusterMetadataUpdater = new TestClusterMetadataUpdater(Collections.singletonList(node));
+
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
+    private final NetworkClient clusterClient = createClusterNetworkClient();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
@@ -85,6 +88,13 @@ public class NetworkClientTest {
                 64 * 1024, 64 * 1024, minRequestTimeoutMs, time, false, new ApiVersions(), new LogContext());
     }
 
+    private NetworkClient createClusterNetworkClient() {
+        return new NetworkClient(selector, clusterMetadataUpdater, "mock-cluster-md", Integer.MAX_VALUE,
+            0, 0, 64 * 1024, 64 * 1024,
+            minRequestTimeoutMs, time, true, new ApiVersions(), new LogContext(),
+            Collections.singletonList("example.com:10000"));
+    }
+
     @Before
     public void setup() {
         selector.reset();
@@ -98,6 +108,13 @@ public class NetworkClientTest {
         ClientRequest request = client.newClientRequest("5", builder, now, false);
         client.send(request, now);
         client.poll(1, time.milliseconds());
+    }
+
+    @Test
+    public void testResolveBootstrapInLeastLoadedNode() {
+        clusterClient.ready(node, time.milliseconds());
+        assertFalse(clusterClient.isReady(node, time.milliseconds()));
+        assertNotEquals(node, clusterClient.leastLoadedNode(time.milliseconds()));
     }
 
     @Test
@@ -612,6 +629,18 @@ public class NetworkClientTest {
         public void onComplete(ClientResponse response) {
             this.executed = true;
             this.response = response;
+        }
+    }
+
+    private static class TestClusterMetadataUpdater extends ManualMetadataUpdater {
+
+        public TestClusterMetadataUpdater(List<Node> nodes) {
+            super(nodes);
+        }
+
+        @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return true;
         }
     }
 }

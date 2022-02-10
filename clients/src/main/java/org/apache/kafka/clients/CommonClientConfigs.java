@@ -102,6 +102,12 @@ public class CommonClientConfigs {
     public static final String ENABLE_STICKY_METADATA_FETCH_DOC = "Fetch metadata from the least loaded broker if false. Otherwise fetch metadata "
                                                          + "from the same broker until it is disconnected.";
 
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = "li.client.cluster.metadata.expire.time.ms";
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_DOC = "The configuration controls the max time the client cluster metadata can remain idle/unchanged before "
+        + "trying to resolve the bootstrap servers from given url again; different from the other metadata.max.age.ms config, "
+        + "which will try to refresh metadata by choosing from existing resolved node set, this config will force resolving "
+        + "the bootstrap url again to get new node set and use the new node set to send update metadata request";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

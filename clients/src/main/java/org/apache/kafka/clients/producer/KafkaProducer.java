@@ -409,7 +409,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.metadata =
                     new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG), config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), true,
-                        clusterResourceListeners, config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG));
+                        clusterResourceListeners, config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG),
+                        config.getLong(ProducerConfig.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG));
                 this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
             }
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
@@ -425,7 +426,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG), this.requestTimeoutMs, time, true, apiVersions,
-                    throttleTimeSensor, logContext);
+                    throttleTimeSensor, logContext, producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
                 networkClient.setEnableStickyMetadataFetch(config.getBoolean(CommonClientConfigs.ENABLE_STICKY_METADATA_FETCH_CONFIG));
                 client = networkClient;
             }

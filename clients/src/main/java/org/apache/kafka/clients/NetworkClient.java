@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.Collections;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -116,6 +117,8 @@ public class NetworkClient implements KafkaClient {
 
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
+    private final List<String> bootstrapServers = new LinkedList<>();
+
     private final Sensor throttleTimeSensor;
 
     public NetworkClient(Selectable selector,
@@ -145,7 +148,8 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              null,
-             logContext);
+             logContext,
+             Collections.emptyList());
     }
 
     public NetworkClient(Selectable selector,
@@ -161,7 +165,8 @@ public class NetworkClient implements KafkaClient {
             boolean discoverBrokerVersions,
             ApiVersions apiVersions,
             Sensor throttleTimeSensor,
-            LogContext logContext) {
+            LogContext logContext,
+            List<String> bootstrapServers) {
         this(null,
              metadata,
              selector,
@@ -176,7 +181,8 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              throttleTimeSensor,
-             logContext);
+             logContext,
+             bootstrapServers);
     }
 
     public NetworkClient(Selectable selector,
@@ -206,7 +212,40 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              null,
-             logContext);
+             logContext,
+             Collections.emptyList());
+    }
+
+    public NetworkClient(Selectable selector,
+                         MetadataUpdater metadataUpdater,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         LogContext logContext,
+                         List<String> bootstrapServers) {
+        this(metadataUpdater,
+            null,
+             selector,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             null,
+             logContext,
+             bootstrapServers);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -223,7 +262,8 @@ public class NetworkClient implements KafkaClient {
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
                           Sensor throttleTimeSensor,
-                          LogContext logContext) {
+                          LogContext logContext,
+                          List<String> bootstrapServersConfig) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -251,6 +291,7 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.logContext = logContext;
         this.log = logContext.logger(NetworkClient.class);
+        this.bootstrapServers.addAll(bootstrapServersConfig);
     }
 
     public void setEnableStickyMetadataFetch(boolean enableStickyMetadataFetch) {
@@ -532,15 +573,7 @@ public class NetworkClient implements KafkaClient {
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);
-
-        try {
-            handleCompletedReceives(responses, updatedNow);
-        } catch (StaleClusterMetadataException e) {
-            // upon stale metadata exception from a different cluster, close the network client
-            // the producer/consumer will hit closedSelector exception and close
-            log.error("Received stale metadata from a different cluster, close the network client now");
-            this.close();
-        }
+        handleCompletedReceives(responses, updatedNow);
 
         handleDisconnections(responses, updatedNow);
         handleConnections();
@@ -630,6 +663,25 @@ public class NetworkClient implements KafkaClient {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
         Node found = null;
+
+        if (this.metadataUpdater.isUpdateClusterMetadataDue(now)) {
+            //update cluster metadata due, resolve bootstrap server and randomly pick up
+            //one node from the resolved node set as least loaded node
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                this.bootstrapServers);
+            List<Node> newNodes = new ArrayList<>();
+
+            int nodeId = -1;
+            for (InetSocketAddress address : addresses) {
+                newNodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+            }
+
+            int offset = this.randOffset.nextInt(newNodes.size());
+            Node node = newNodes.get(offset);
+            log.info("Resolved bootstrap server again, randomly picked node {} as least loaded node from the resolved node set", node);
+
+            return node;
+        }
 
         int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
@@ -943,6 +995,11 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return this.metadata.shouldUpdateClusterMetadataFromBootstrap(now);
+        }
+
+        @Override
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
@@ -1051,6 +1108,7 @@ public class NetworkClient implements KafkaClient {
          */
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
+            this.metadata.incrementNodesTriedSinceLastSuccessfulRefresh();
 
             if (canSendRequest(nodeConnectionId, now)) {
                 this.metadataFetchInProgress = true;
