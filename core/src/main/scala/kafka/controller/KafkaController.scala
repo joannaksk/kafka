@@ -71,12 +71,8 @@ object KafkaController extends Logging {
             // Use min size of all replica lists as a stand in for replicationFactor. Generally replicas sizes should be
             // the same, but minBy gets us the worst case.
             val replicationFactor = partitionsAssignment.minBy(_._2.replicas.size)._2.replicas.size.toShort
-//GRR FIXME:  hitting validation error here (maybe?), not clear why...unless we're missing some cross-cluster metadata?
-//GRR FIXME2:  do we still need this, or is it fixed?  haven't seen problem here in a while...but also not seeing logs, so how did we trigger this in first place? [first added logs on 20211221...] [hmmm, no captured logs with these debug stmts, but seems like might have been due to failure to clear batch after processing it, which was fixed long ago]
-            info(s"GRR DEBUG:  satisfiesLiCreateTopicPolicy(): about to call validate()")
             policy.validate(new CreateTopicPolicy.RequestMetadata(topic, partitionsAssignment.size, replicationFactor,
               jPartitionAssignment.asJava, new java.util.HashMap[String, String]()))
-            info(s"GRR DEBUG:  satisfiesLiCreateTopicPolicy(): done with validate()")
           }
           true
         case None =>

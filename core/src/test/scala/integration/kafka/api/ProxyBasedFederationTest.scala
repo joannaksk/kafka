@@ -43,6 +43,24 @@ class ProxyBasedFederationTest extends MultiClusterAbstractConsumerTest {
   def testBasicMultiClusterSetup(): Unit = {
     debug(s"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n") // GRR DEBUG
     debug(s"GRR DEBUG:  beginning testBasicMultiClusterSetup() with numClusters=${numClusters} and brokerCountPerCluster=${brokerCountPerCluster}")
+
+    debug(s"GRR DEBUG:  creating admin client for cluster 0")
+    val cluster0AdminClient = createAdminClient(clusterIndex = 0)
+    debug(s"GRR DEBUG:  requesting list of topics using admin client for cluster 0 ...")
+    var topicsViaCluster0 = cluster0AdminClient.listTopics().names().get(10000, TimeUnit.MILLISECONDS)
+    debug(s"GRR DEBUG:  topics list via broker in physical cluster 0 = ${topicsViaCluster0}")
+
+    // topic ${topicNameCluster0} _should_ have been created in cluster 0 by setUp(), but if it wasn't for
+    // any reason (e.g., tinkering with another test case), we'll have an infinite loop here if auto-topic
+    // creation is disabled => check and proactively create it ourselves if necessary
+    if (!topicsViaCluster0.contains(topicNameCluster0)) {
+      debug(s"GRR DEBUG:  test topic was NOT created in setUp(); creating dual-partition topic '${topicNameCluster0}' in cluster 0 now")
+      createTopic(topicNameCluster0, numPartitions = 2, replicaCount, clusterIndex = 0)
+      debug(s"GRR DEBUG:  again requesting list of topics using admin client for cluster 0 ...")
+      topicsViaCluster0 = cluster0AdminClient.listTopics().names().get(10000, TimeUnit.MILLISECONDS)
+      debug(s"GRR DEBUG:  topics list via broker in physical cluster 0 = ${topicsViaCluster0}")
+    }
+
     val numRecords = 1000
     debug(s"GRR DEBUG:  creating producer (IMPLICITLY FOR CLUSTER 0)")
     val producer = createProducer()

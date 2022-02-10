@@ -762,9 +762,9 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         controllerContext.getLiveOrShuttingDownRemoteControllerIds.foreach { remoteControllerId =>
           info(s"GRR DEBUG:  local controllerId=${config.brokerId} sending updateMetadataRequest to remote controllerId=${remoteControllerId}")
           sendRequest(remoteControllerId, updateMetadataRequest, (r: AbstractResponse) => {
-          val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
-          sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, remoteControllerId))
-        })
+            val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
+            sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, remoteControllerId))
+          })
         }
       }
 
