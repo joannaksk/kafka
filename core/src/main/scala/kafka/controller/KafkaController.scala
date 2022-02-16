@@ -341,23 +341,25 @@ class KafkaController(val config: KafkaConfig,
    */
   def rewriteAndForwardRemoteUpdateMetadataRequest(umr: UpdateMetadataRequest): UpdateMetadataResponse = {
 
-    // Upstream caller has already verified that clusterId doesn't match our own AND routingClusterId doesn't match
-    // (null or mismatch), i.e., this is a remote, incoming request (or a bug...).
+    // Upstream caller has already verified that originClusterId doesn't match our own AND routingClusterId doesn't
+    // match (null or mismatch), i.e., this is a remote, incoming request (or a bug).
 
     // OPERABILITY TODO (longer-term):  would be good to associate a (persistent) color with each physical cluster
     // and include it in logging (and probably also in some znode) => more human-memorable than random UUID strings
-    // [maybe do same thing for federation overall => refuse to talk to remote controller if federation-color (or
-    //  flavor/fruit/star/name/etc.) doesn't match own:  useful sanity check]
+    // (though might be tricky to consistently and persistently associate a _unique_ color with each cluster in the
+    // federation...hmmm)
+    // [LIKAFKA-42834:  do same thing for federation overall => refuse to talk to remote controller if its federation
+    //  ID-string doesn't match our own:  useful sanity check]
 
     info(s"GRR DEBUG: controller for clusterId=${clusterId} has received a remote, non-rewritten UpdateMetadataRequest "
-        + s"(UMR clusterId=${umr.clusterId}, routingClusterId=${umr.routingClusterId}), and li.federation.enable="
+        + s"(UMR clusterId=${umr.originClusterId}, routingClusterId=${umr.routingClusterId}), and li.federation.enable="
         + s"${config.liFederationEnable}: about to validate and rewrite it")
 
-    if (!config.liFederationEnable) {
+    if (!config.liFederationEnable) {  // is this even possible?  KafkaApis shouldn't call us unless federation == true
       // GRR TODO:  increment some (new?) error metric
       // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
       // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.clusterId} " +
+      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.originClusterId} " +
         s"with routingClusterId=${umr.routingClusterId}, but li.federation.enable=${config.liFederationEnable}")
     }
 
@@ -365,11 +367,11 @@ class KafkaController(val config: KafkaConfig,
       // GRR TODO:  increment some (new?) error metric
       // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
       // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.clusterId}, " +
+      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.originClusterId}, " +
         s"but routingClusterId=${umr.routingClusterId} does not match us (clusterId=${clusterId})")
     }
-    // upstream already handled routingClusterId == clusterId case, so at this point we know routingClusterId == null
-    // and we can safely rewrite it
+    // KafkaApis already handled the umr.routingClusterId == clusterId case, so at this point we know
+    // umr.routingClusterId == null and can safely rewrite it
 
     // GRR FIXME:  should we refresh the preferred-controller list first?  presumably it's latency-expensive...
     //controllerContext.setLivePreferredControllerIds(zkClient.getPreferredControllerList.toSet)
@@ -377,22 +379,23 @@ class KafkaController(val config: KafkaConfig,
       // GRR TODO:  increment some (new?) error metric
       // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
       // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received UpdateMetadataRequest from clusterId=${umr.clusterId} " +
+      throw new IllegalStateException(s"Received UpdateMetadataRequest from clusterId=${umr.originClusterId} " +
         s"(we're clusterId=${clusterId}), but we're not a preferred controller")
     }
 
-    // At this point we know routingClusterId == null and we're a controller node (maybe not leader, but preferred).
-    // Both leaders and inactive preferred controllers (i.e., everybody who receives this request) need to cache
+    // At this point we know routingClusterId == null and we're a controller node (maybe not active, but preferred).
+    // Both active and inactive preferred controllers (i.e., everybody who receives this request) need to cache
     // the remote data (in "firewalled" data structures) in order to serve it but not otherwise act on it.
 
-//GRR WORKING:
-// GRR TODO:  cache metadata in some new data structures for remote physical clusters' info:  FIGURE OUT WHAT KIND
-// [huh...not seeing any such data structures in this class...all buried within ChannelMgr or EventMgr?]
-// [ChannelMgr has brokerStateInfo hashmap...all brokers, keyed by brokerId (NEEDS brokerLock!)]
+    // GRR TODO:  remote-controller metadata is cached within channel manager, but need to verify (or ensure) that
+    //   admin operations requested of local controller don't result in action against remote controllers, only
+    //   local brokers
 
-    // FIXME?  is there a isActive race condition here such that a remote request could get dropped if
+    // FIXME?  is there an isActive race condition here such that a remote request could get dropped if
     //   a non-active/leader controller becomes the leader right around the time both old and new leaders
-    //   are checking this conditional?
+    //   are checking this conditional?  [no, should be safe:  newly active controller will be proactively
+    //   sent full metadata dumps by all remote controllers, even if they're newly active as well:  see
+    //   startup/failover section of design doc]
     if (isActive) {  // rewrite request and stuff it back into "the queue" (whatever/wherever that is)
       // rewrite request (in place)
       umr.rewriteRemoteRequest(

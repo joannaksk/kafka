@@ -323,19 +323,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Since handleLiCombinedControlRequest() calls us directly (bypassing handleUpdateMetadataRequest() and its
     // stale broker-epoch check), this seems like the most appropriate place for the new federation "router" to
-    // live [GRR]:  rest of (original) method is the legacy "broker half" logic.
-    if (!config.liFederationEnable || clusterId.equals(updateMetadataRequest.clusterId) || clusterId.equals(updateMetadataRequest.routingClusterId)) {
-      // This is either a local/legacy/non-federated request (from our ZK => clusterId matches) or one our controller
+    // live:  rest of (original) method is the legacy "broker half" logic.
+    if (!config.liFederationEnable || clusterId.equals(updateMetadataRequest.originClusterId) || clusterId.equals(updateMetadataRequest.routingClusterId)) {
+      // This is either a local/legacy/non-federated request (from our ZK => originClusterId matches) or one our controller
       // has already rewritten (received from a remote controller => routingClusterId matches), so do the normal,
       // broker-half processing below.
-//    info(s"GRR DEBUG:  brokerId=${brokerId} received updateMetadataRequest: controllerId=${updateMetadataRequest.controllerId}, clusterId=${updateMetadataRequest.clusterId}, routingClusterId=${updateMetadataRequest.routingClusterId}")
-      if (updateMetadataRequest.clusterId != null && clusterId.equals(updateMetadataRequest.routingClusterId)) {
-        info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received rewritten updateMetadataRequest from remote clusterId=${updateMetadataRequest.clusterId}")
+//    info(s"GRR DEBUG:  brokerId=${brokerId} received updateMetadataRequest: controllerId=${updateMetadataRequest.controllerId}, originClusterId=${updateMetadataRequest.originClusterId}, routingClusterId=${updateMetadataRequest.routingClusterId}")
+      if (updateMetadataRequest.originClusterId != null && clusterId.equals(updateMetadataRequest.routingClusterId)) {
+        info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received rewritten updateMetadataRequest from remote clusterId=${updateMetadataRequest.originClusterId}")
       }
       // [The following block is NOT properly indented in order to simplify upstream merges.]
 
 
-    info(s"GRR DEBUG:  brokerId=${brokerId} calling maybeUpdateMetadataCache() with correlationId=${correlationId} and updateMetadataRequest from clusterId=${updateMetadataRequest.clusterId}")
+    info(s"GRR DEBUG:  brokerId=${brokerId} calling maybeUpdateMetadataCache() with correlationId=${correlationId} and updateMetadataRequest from clusterId=${updateMetadataRequest.originClusterId}")
     val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
     if (deletedPartitions.nonEmpty)
       groupCoordinator.handleDeletedPartitions(deletedPartitions)
@@ -346,7 +346,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     quotas.clientQuotaCallback.foreach { callback =>
-      // GRR FIXME:  clusterId arg in here is probably wrong for remote UMRs, but need to see what
+      // GRR FIXME (LIKAFKA-42886):  clusterId arg in here is probably wrong for remote UMRs, but need to see what
       //   callback.updateClusterMetadata() actually does with it
       if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
         quotas.fetch.updateQuotaMetricConfigs()
@@ -367,7 +367,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       // [Federation only.] This is an incoming remote request (i.e., from another physical cluster in the federation),
       // so hand it off to our controller half for validation, rewriting, and rerouting.
-      info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received new updateMetadataRequest from remote controllerId=${updateMetadataRequest.controllerId} in clusterId=${updateMetadataRequest.clusterId}; sending to controller for validation and rewrite")
+      info(s"GRR DEBUG:  local brokerId=${brokerId} in clusterId=${clusterId} received new updateMetadataRequest from remote controllerId=${updateMetadataRequest.controllerId} in clusterId=${updateMetadataRequest.originClusterId}; sending to controller for validation and rewrite")
       controller.rewriteAndForwardRemoteUpdateMetadataRequest(updateMetadataRequest) // modifies UMR in place, returns response
       // same method ^^^ stuffs the rewritten UMR into the processing queue, which lives in controller's
       // ControllerEventManager (KafkaController's eventManager member var)

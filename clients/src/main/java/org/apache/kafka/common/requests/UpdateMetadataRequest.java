@@ -51,7 +51,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
-        private final String clusterId;
+        private final String originClusterId;
         private Lock buildLock = new ReentrantLock();
 
         // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
@@ -59,11 +59,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
-                       String clusterId) {
+                       String originClusterId) {
             super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
-            this.clusterId = clusterId;
+            this.originClusterId = originClusterId;
         }
 
         @Override
@@ -108,10 +108,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-            // clusterId == null implies federation is not enabled (though reverse may not be true); will be ignored
-            // during serialization (data.toStruct())
+            // originClusterId == null implies federation is not enabled (though reverse may not be true); will be
+            // ignored during serialization (data.toStruct())
             if (version >= 7) {
-                data.setClusterId(clusterId);
+                data.setOriginClusterId(originClusterId);
             }
 
             updateMetadataRequest = new UpdateMetadataRequest(data, version);
@@ -178,7 +178,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         public WrappingBuilder(UpdateMetadataRequest umr) {
             super(umr.version(), umr.controllerId(), umr.controllerEpoch(), umr.brokerEpoch(), umr.maxBrokerEpoch(),
-                toList(umr.partitionStates()), umr.liveBrokers(), umr.clusterId());
+                toList(umr.partitionStates()), umr.liveBrokers(), umr.originClusterId());
             this.updateMetadataRequest = umr;
         }
 
@@ -251,8 +251,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     // federation
-    public String clusterId() {
-        return data.clusterId();
+    public String originClusterId() {
+        return data.originClusterId();
     }
 
     // federation

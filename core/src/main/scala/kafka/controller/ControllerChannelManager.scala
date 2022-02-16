@@ -106,7 +106,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     // GRR FIXME: should we instrument the time spent waiting for this lock (and its other 5 call sites)?
     //   (would love to see histogram in active controller)
     brokerLock synchronized {
-      var stateInfoOpt = brokerStateInfo.get(brokerId)
+      val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
           stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
