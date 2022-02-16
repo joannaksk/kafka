@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{HashMap, ListBuffer}
+import scala.collection.mutable.{HashMap, HashSet, ListBuffer}
 import scala.collection.{Seq, Map, Set, mutable}
 
 object ControllerChannelManager {
@@ -56,7 +56,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   import ControllerChannelManager._
 
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
-  protected val remoteControllerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
+  protected val remoteControllerIds = new HashSet[Int]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
   val brokerResponseSensors: mutable.Map[ApiKeys, BrokerResponseTimeStats] = mutable.HashMap.empty
@@ -64,8 +64,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     "TotalQueueSize",
     new Gauge[Int] {
       def value: Int = brokerLock synchronized {
-        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum +
-            remoteControllerStateInfo.values.iterator.map(_.messageQueue.size).sum
+        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
       }
     }
   )
@@ -74,9 +73,10 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     controllerContext.liveOrShuttingDownBrokers.foreach(addNewBroker)
 
     brokerLock synchronized {
+      info(s"GRR DEBUG:  about to iterate brokerStateInfo to start RequestSendThreads "
+          + s"(${brokerStateInfo.size - remoteControllerIds.size} local brokers, ${remoteControllerIds.size} "
+          + "remote controllers)")
       brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1, brokerState._2.requestSendThread))
-      info("GRR DEBUG:  about to iterate remoteControllerStateInfo to start RequestSendThreads")
-      remoteControllerStateInfo.foreach(remoteState => startRequestSendThread(remoteState._1, remoteState._2.requestSendThread))
     }
     initBrokerResponseSensors()
   }
@@ -84,7 +84,6 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   def shutdown() = {
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
-      remoteControllerStateInfo.values.toList.foreach(removeExistingBroker)
     }
     removeBrokerResponseSensors()
   }
@@ -105,20 +104,14 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit = {
     // GRR FIXME: should we instrument the time spent waiting for this lock (and its other 5 call sites)?
-    //   (would love to see histogram in leader-controller)
+    //   (would love to see histogram in active controller)
     brokerLock synchronized {
       var stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
           stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
         case None =>
-          stateInfoOpt = remoteControllerStateInfo.get(brokerId)
-          stateInfoOpt match {
-            case Some(stateInfo) =>
-              stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
-            case None =>
-              warn(s"Not sending request $request to broker $brokerId, since it is offline.")
-          }
+          warn(s"Not sending request $request to broker $brokerId, since it is offline.")
       }
     }
   }
@@ -173,9 +166,9 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   def addRemoteController(remoteBroker: Broker): Unit = {
     info(s"GRR DEBUG:  controllerId=${config.brokerId} adding remote controller [${remoteBroker}] for FEDERATION INTER-CLUSTER REQUESTS and starting its RequestSendThread")
     brokerLock synchronized {
-      if (!remoteControllerStateInfo.contains(remoteBroker.id)) {
+      if (!remoteControllerIds.contains(remoteBroker.id)) {
         addNewBroker(remoteBroker, false)
-        startRequestSendThread(remoteBroker.id, remoteControllerStateInfo(remoteBroker.id).requestSendThread)
+        startRequestSendThread(remoteBroker.id, brokerStateInfo(remoteBroker.id).requestSendThread)
       }
     }
   }
@@ -260,15 +253,12 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       brokerMetricTags(broker.id)
     )
 
-    //GRR FIXME:  do sanity check whether same ID exists within sibling map (brokerStateInfo/remoteControllerStateInfo)
-    if (isLocal) {
-      brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
-        requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
-    } else {
-      info(s"GRR DEBUG:  adding ${brokerNode} info (network client, message queue, request thread, etc.) to new remoteControllerStateInfo map for federation inter-cluster requests")
-      remoteControllerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
-        requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
+    if (!isLocal) {
+      info(s"GRR DEBUG:  adding remote ${brokerNode} info (network client, message queue, request thread, etc.) to brokerStateInfo map for federation inter-cluster requests")
+      remoteControllerIds.add(broker.id)
     }
+    brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
+      requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
 
   private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
@@ -286,8 +276,6 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       removeMetric(QueueSizeMetricName, brokerMetricTags(brokerState.brokerNode.id))
       removeMetric(RequestRateAndQueueTimeMetricName, brokerMetricTags(brokerState.brokerNode.id))
       brokerStateInfo.remove(brokerState.brokerNode.id)
-//GRR FIXME?
-      remoteControllerStateInfo.remove(brokerState.brokerNode.id)  // make conditional on "None" return from prev line?
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
     }

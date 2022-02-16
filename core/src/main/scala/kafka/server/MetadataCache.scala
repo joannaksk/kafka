@@ -41,22 +41,19 @@ import scala.collection.{Seq, Set, mutable}
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
  */
-class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", federationEnabled: Boolean = false) extends Logging {
+class MetadataCache(brokerId: Int) extends Logging {
 
-  private val partitionMetadataLock = new ReentrantReadWriteLock()
+  protected val partitionMetadataLock = new ReentrantReadWriteLock()
   //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
   //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
   //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
   //multiple reads of this value risk getting different snapshots.
-  @volatile private var metadataSnapshot: MetadataSnapshot = if (federationEnabled)
-    MultiClusterMetadataSnapshot(partitionStatesMap = mutable.AnyRefMap.empty, controllerIdOpt = None,
-      multiClusterAliveBrokers = mutable.Map.empty, multiClusterAliveNodes = mutable.Map.empty)
-    else
+  @volatile protected var metadataSnapshot: MetadataSnapshot =
     SingleClusterMetadataSnapshot(partitionStatesMap = mutable.AnyRefMap.empty, controllerIdOpt = None,
       aliveBrokersMap = mutable.LongMap.empty, aliveNodesMap = mutable.LongMap.empty)
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
-  private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
+  protected val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
@@ -232,10 +229,10 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId
 
-  // [GRR TODO:  sole caller = legacy (non-rewrite) half of doHandleUpdateMetadataRequest() in KafkaApis; clusterId
-  //  arg was already there...but might need to be omitted or modified or something?  need to figure out how returned
-  //  Cluster part is used (something about client quota callback, so presumably we want clusterId in UMR, not that
-  //  of local cluster)]
+  // GRR FIXME (LIKAFKA-42885):  sole caller = legacy (non-rewrite) half of doHandleUpdateMetadataRequest() in
+  //  KafkaApis; clusterId arg was already there...but might need to be omitted or modified or something for
+  //  federation case?  need to figure out how returned Cluster part is used (something about client quota
+  //  callback, so presumably we want clusterId in UMR, not that of local cluster)
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val snapshot = metadataSnapshot
     val nodes = snapshot.aliveNodes.map { case (id, nodes) => (id, nodes.get(listenerName).orNull) }
@@ -259,92 +256,14 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest.
   // The key invariant is that the new snapshot cannot affect the old one, i.e., an _unchanged_
   // set of partition states can be reused, but if there are updates, they must go into a
-  // completely new map within the new snapshot.  Similarly, federated multi-clusters can
-  // reuse the (unchanging) aliveBrokers and aliveNodes sub-maps corresponding to all physical
-  // clusters not specified in the update request, but their parent multimaps cannot be reused
-  // since one of the physical clusters (the one in the request) always has broker/node changes.
-  // [TODO:  add brokerId range-checking to detect when one physical cluster's range overlaps
-  //  another's]
+  // completely new map within the new snapshot.
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
 
-      info(s"GRR DEBUG: entering updateMetadata() (correlationId=${correlationId}, UpdateMetadataRequest clusterId=${updateMetadataRequest.clusterId}, local clusterId=${localClusterId}, federationEnabled=${federationEnabled})")
+      val singleClusterAliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
+      val singleClusterAliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
 
-
-
-//FIXME:  is there a better pattern for the following?  this method needs both sets to exist so update of
-//  metadataSnapshot at end works, but each pair is pointless overhead for the opposite case (federation vs. not),
-//  so initialization to null is the simplest, cheapest approach (no extra Option derefs, etc.) ...
-//  alternatively, could use vars and not set until conditional block below, or could accept (minor) code
-//  duplication of controllerId/deletedPartitions/partitionStates block and just have completely separate
-//  federation vs. non-federation versions of this method ("updatedMultiClusterMetadata()" /
-//  "updateSingleClusterMetadata()"):  preferred?  (would avoid multiple checks of federationEnabled boolean,
-//  at least...)
-
-      // federation case:  multi-cluster "envelopes" for all clusters' broker/node-maps (keyed by clusterId)
-      val multiClusterAliveBrokers = if (federationEnabled)
-          new mutable.HashMap[String, mutable.LongMap[Broker]] // (metadataSnapshot.numClusters + 1)   <-- GRR TODO?
-          else null
-      val multiClusterAliveNodes = if (federationEnabled)
-          new mutable.HashMap[String, mutable.LongMap[collection.Map[ListenerName, Node]]] // (metadataSnapshot.numClusters + 1)
-          else null
-
-      // legacy data structures for a single physical cluster's brokers/nodes
-      val singleClusterAliveBrokers = if (!federationEnabled)
-          new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
-          else null
-      val singleClusterAliveNodes = if (!federationEnabled)
-          new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
-          else null
-
-
-      if (federationEnabled) {
-
-        val mcMetadataSnapshot: MultiClusterMetadataSnapshot = metadataSnapshot.asInstanceOf[MultiClusterMetadataSnapshot]
-
-        // populate each new envelope-map with all clusters' brokers/nodes, except for the cluster in the UMR:
-        mcMetadataSnapshot.multiClusterAliveBrokers.keys.foreach { clusterId =>
-          if (!clusterId.equals(updateMetadataRequest.clusterId)) {
-            info(s"GRR DEBUG: updateMetadata(): copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.clusterId} brokers")
-            multiClusterAliveBrokers(clusterId) = mcMetadataSnapshot.multiClusterAliveBrokers(clusterId)
-          } else {
-            info(s"GRR DEBUG: updateMetadata(): NOT copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is replacing those")
-          }
-        }
-        mcMetadataSnapshot.multiClusterAliveNodes.keys.foreach { clusterId =>
-          if (!clusterId.equals(updateMetadataRequest.clusterId)) {
-            info(s"GRR DEBUG: updateMetadata(): copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.clusterId} nodes")
-            multiClusterAliveNodes(clusterId) = mcMetadataSnapshot.multiClusterAliveNodes(clusterId)
-          } else {
-            info(s"GRR DEBUG: updateMetadata(): NOT copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is replacing those")
-          }
-        }
-
-        // replacement broker- and node-maps for the UpdateMetadataRequest's single physical cluster, which
-        // replaces our current copy:
-        val umrClusterId = if (updateMetadataRequest.clusterId != null) updateMetadataRequest.clusterId else localClusterId
-        val numBrokersInUpdatingCluster = if (mcMetadataSnapshot.multiClusterAliveBrokers.contains(umrClusterId))
-            mcMetadataSnapshot.multiClusterAliveBrokers(umrClusterId).size else 0
-        val numNodesInUpdatingCluster = if (mcMetadataSnapshot.multiClusterAliveNodes.contains(umrClusterId))
-            mcMetadataSnapshot.multiClusterAliveNodes(umrClusterId).size else 0
-        val umrAliveBrokers = new mutable.LongMap[Broker](numBrokersInUpdatingCluster)
-        val umrAliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](numNodesInUpdatingCluster)
-
-        // unconditional replacement of snapshot's broker/node-maps (for a single physical cluster) with those
-        // specified in updateMetadataRequest (there's no such thing as delta-updates for a cluster's nodes)
-        generateSingleClusterBrokersAndNodesMaps(updateMetadataRequest, umrAliveBrokers, umrAliveNodes)
-
-        multiClusterAliveBrokers(umrClusterId) = umrAliveBrokers
-        multiClusterAliveNodes(umrClusterId) = umrAliveNodes
-
-      } else {  // non-federation (legacy/single-cluster) case
-
-        generateSingleClusterBrokersAndNodesMaps(updateMetadataRequest, singleClusterAliveBrokers, singleClusterAliveNodes)
-
-      }
-
-
-
+      generateSingleClusterBrokersAndNodesMaps(updateMetadataRequest, singleClusterAliveBrokers, singleClusterAliveNodes)
 
       val controllerId = updateMetadataRequest.controllerId match {
           case id if id < 0 => None
@@ -353,11 +272,7 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       val possiblyUpdatedPartitionStates = possiblyUpdatePartitionStates(updateMetadataRequest, deletedPartitions, correlationId)
 
-      metadataSnapshot = if (federationEnabled) {
-        MultiClusterMetadataSnapshot(possiblyUpdatedPartitionStates, controllerId, multiClusterAliveBrokers, multiClusterAliveNodes)
-      } else {
-        SingleClusterMetadataSnapshot(possiblyUpdatedPartitionStates, controllerId, singleClusterAliveBrokers, singleClusterAliveNodes)
-      }
+      metadataSnapshot = SingleClusterMetadataSnapshot(possiblyUpdatedPartitionStates, controllerId, singleClusterAliveBrokers, singleClusterAliveNodes)
 
       deletedPartitions
     }
@@ -369,7 +284,7 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
 
   def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
-  private def generateSingleClusterBrokersAndNodesMaps(
+  protected def generateSingleClusterBrokersAndNodesMaps(
       updateMetadataRequest: UpdateMetadataRequest,
       aliveBrokers: mutable.LongMap[Broker],
       aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]):
@@ -397,7 +312,7 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
 
   // Conditional replacement of snapshot's partitionStates (might be a full update, a partial update, or no update);
   // called under lock.
-  private def possiblyUpdatePartitionStates(
+  protected def possiblyUpdatePartitionStates(
       updateMetadataRequest: UpdateMetadataRequest,
       deletedPartitions: mutable.ArrayBuffer[TopicPartition],
       correlationId: Int):
@@ -412,12 +327,9 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
         copy ++= oldPartitionStates
         partitionStates += (topic -> copy)
       }
-//GRR FIXME:  why are/were these two top-level (request) vals not popped out of the loop?  (used solely for trace-level logging, too!)
       val controllerId = updateMetadataRequest.controllerId
       val controllerEpoch = updateMetadataRequest.controllerEpoch
       updateMetadataRequest.partitionStates.asScala.foreach { info =>
-        //val controllerId = updateMetadataRequest.controllerId
-        //val controllerEpoch = updateMetadataRequest.controllerEpoch
         val tp = new TopicPartition(info.topicName, info.partitionIndex)
         if (info.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(partitionStates, tp.topic, tp.partition)
@@ -459,40 +371,6 @@ class MetadataCache(brokerId: Int, localClusterId: String = "defaultClusterId", 
       aliveBrokersMap: mutable.LongMap[Broker],
       aliveNodesMap: mutable.LongMap[collection.Map[ListenerName, Node]])
       extends MetadataSnapshot {
-    def partitionStates() = partitionStatesMap
-    def controllerId() = controllerIdOpt
-    def aliveBrokers() = aliveBrokersMap
-    def aliveNodes() = aliveNodesMap
-  }
-
-
-  // TODO:  add brokerId ranges (track in updateMetadata()) as sanity check: ensure no overlap between physical clusters
-  case class MultiClusterMetadataSnapshot(
-      partitionStatesMap: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
-      controllerIdOpt: Option[Int],
-      multiClusterAliveBrokers: mutable.Map[String, mutable.LongMap[Broker]],
-      multiClusterAliveNodes: mutable.Map[String, mutable.LongMap[collection.Map[ListenerName, Node]]])
-      extends MetadataSnapshot {
-
-    // GRR VERIFY:  intention is that these things get called exactly once per construction (regardless of getter
-    //   calls), since "val" is like "final" and can be set only in ctor...
-    val aliveBrokersMap: mutable.LongMap[Broker] = {
-      val flattenedBrokersMap: mutable.LongMap[Broker] = new mutable.LongMap[Broker]  // FIXME? could add loop to count total size, or could track it dynamically within snapshots...
-      multiClusterAliveBrokers.values.foreach { brokerMap =>
-        flattenedBrokersMap ++= brokerMap
-      }
-      flattenedBrokersMap
-    }
-
-    val aliveNodesMap: mutable.LongMap[collection.Map[ListenerName, Node]] = {
-      val flattenedNodesMap: mutable.LongMap[collection.Map[ListenerName, Node]] =
-          new mutable.LongMap[collection.Map[ListenerName, Node]]  // FIXME? could add loop to count total size, or could track it dynamically within snapshots...
-      multiClusterAliveNodes.values.foreach { nodesMap =>
-        flattenedNodesMap ++= nodesMap
-      }
-      flattenedNodesMap
-    }
-
     def partitionStates() = partitionStatesMap
     def controllerId() = controllerIdOpt
     def aliveBrokers() = aliveBrokersMap

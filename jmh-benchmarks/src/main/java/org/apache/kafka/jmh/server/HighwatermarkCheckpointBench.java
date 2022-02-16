@@ -110,7 +110,7 @@ public class HighwatermarkCheckpointBench {
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                new MetadataCache(this.brokerProperties.brokerId(), "dummyClusterId", false);
+                new MetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

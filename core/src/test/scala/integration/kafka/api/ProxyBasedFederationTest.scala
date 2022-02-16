@@ -41,7 +41,6 @@ class ProxyBasedFederationTest extends MultiClusterAbstractConsumerTest {
 
   @Test
   def testBasicMultiClusterSetup(): Unit = {
-    debug(s"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n") // GRR DEBUG
     debug(s"GRR DEBUG:  beginning testBasicMultiClusterSetup() with numClusters=${numClusters} and brokerCountPerCluster=${brokerCountPerCluster}")
 
     debug(s"GRR DEBUG:  creating admin client for cluster 0")

@@ -108,9 +108,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-            // clusterId == null implies federation is not enabled (though reverse may not be true):  no point in
-            // wasting space on an unused field (TODO? could make it unconditional if useful for debugging purposes)
-            if (version >= 7 && clusterId != null) {
+            // clusterId == null implies federation is not enabled (though reverse may not be true); will be ignored
+            // during serialization (data.toStruct())
+            if (version >= 7) {
                 data.setClusterId(clusterId);
             }
 
@@ -337,8 +337,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             data.setRoutingClusterId(routingClusterId);
             data.setControllerId(controllerId);
             data.setControllerEpoch(controllerEpoch);
-            // brokerEpoch apparently gets rewritten by the controller for every receiving broker (somewhere...):
-            // shouldn't need to mess with it here, right?  or should we remove it in the version >= 6 case?  FIXME?
+            // brokerEpoch apparently gets rewritten by the controller for every receiving broker (somewhere...)
+            // before sending it to them:  shouldn't need to mess with it here, right?  or should we remove it in
+            // the version >= 6 case?  FIXME?
             if (version() >= 6) {
                 data.setMaxBrokerEpoch(maxBrokerEpoch);
             }

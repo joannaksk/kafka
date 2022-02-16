@@ -130,7 +130,7 @@ public class MetadataCacheBenchmark {
             return result;
         }
 
-        public final MetadataCache metadataCache = new MetadataCache(BROKER_ID, "dummyClusterId", false);
+        public final MetadataCache metadataCache = new MetadataCache(BROKER_ID);
         public final ListenerName listenerName = ListenerName.normalised("PLAINTEXT");
         public final scala.collection.Set<String> topicScalaSetInQuery =
             JavaConverters.asScalaSet(Collections.singleton(TOPIC_NAME));
