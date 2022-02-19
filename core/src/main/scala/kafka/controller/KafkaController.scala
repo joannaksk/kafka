@@ -22,14 +22,14 @@ import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
-import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
+import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ForwardUpdateMetadataCallback, ListReassignmentsCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.{ElectionType, KafkaException, TopicPartition, Node}
+import org.apache.kafka.common.{ElectionType, KafkaException, Node, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, NotEnoughReplicasException, PolicyViolationException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.UpdateMetadataResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -57,6 +57,7 @@ object KafkaController extends Logging {
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
+  type ForwardUpdateMetadataCallback = UpdateMetadataResponse => Unit
 
   def satisfiesLiCreateTopicPolicy(createTopicPolicy : Option[CreateTopicPolicy], zkClient : KafkaZkClient,
     topic : String, partitionsAssignment : collection.Map[Int, ReplicaAssignment]): Boolean = {
@@ -417,6 +418,10 @@ class KafkaController(val config: KafkaConfig,
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
     zkClient.updateBrokerInfo(newBrokerInfo)
+  }
+
+  private[kafka] def forwardUpdateMetadataRequest(umr: UpdateMetadataRequest, callback: ForwardUpdateMetadataCallback): Unit = {
+    eventManager.put(ForwardUpdateMetadataRequest(umr, callback))
   }
 
   private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
@@ -1458,6 +1463,26 @@ class KafkaController(val config: KafkaConfig,
     controllerContext.skipShutdownSafetyCheck += (id -> brokerEpoch)
   }
 
+  def processForwardUpdateMetadataRequest(umr: UpdateMetadataRequest, callback: ForwardUpdateMetadataCallback): Unit = {
+    if (!isActive) {
+      throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")
+    }
+
+    info(s"controller for clusterId=${clusterId} has received a remote, non-rewritten UpdateMetadataRequest "
+      + s"(clusterId=${umr.originClusterId}, routingClusterId=${umr.routingClusterId}): about to validate and rewrite it")
+
+    // Inside KafkaApis, we've already validated that
+    // 1. the originClusterId is not equal to my local cluster Id
+    // 2. the routingClusterId is null
+    umr.rewriteRemoteRequest(clusterId, config.brokerId,
+      controllerContext.epoch, controllerContext.maxBrokerEpoch)
+    val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
+    sendRemoteUpdateMetadataRequest(liveBrokers, umr)
+
+    // For now, we always return a successful UpdateMetadataResponse
+    callback(new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code)))
+  }
+
   private def safeToShutdown(id: Int, brokerEpoch: Long): Boolean = {
     // First, check whether or not the broker requesting shutdown has already been told that it is OK to shut down
     // at this epoch.
@@ -2383,6 +2408,8 @@ class KafkaController(val config: KafkaConfig,
           processStartup()
         case SkipControlledShutdownSafetyCheck(id, brokerEpoch, callback) =>
           processSkipControlledShutdownSafetyCheck(id, brokerEpoch, callback)
+        case ForwardUpdateMetadataRequest(umr, callback) =>
+          processForwardUpdateMetadataRequest(umr, callback)
       }
     } catch {
       case e: ControllerMovedException =>
@@ -2587,6 +2614,10 @@ case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCall
 
 case class SkipControlledShutdownSafetyCheck(id: Int, brokerEpoch: Long, skipControlledShutdownSafetyCheckCallback: Try[Unit] => Unit) extends ControllerEvent {
   def state: ControllerState.SkipControlledShutdownSafetyCheck.type = ControllerState.SkipControlledShutdownSafetyCheck
+}
+
+case class ForwardUpdateMetadataRequest(umr: UpdateMetadataRequest, callback: ForwardUpdateMetadataCallback) extends ControllerEvent {
+  def state = ControllerState.ForwardUpdateMetadataRequest
 }
 
 case class LeaderAndIsrResponseReceived(leaderAndIsrResponse: LeaderAndIsrResponse, brokerId: Int) extends ControllerEvent {
