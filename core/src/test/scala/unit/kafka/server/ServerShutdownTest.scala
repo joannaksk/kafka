@@ -228,7 +228,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       val controllerContext = new ControllerContext
       controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-        metrics, new StateChangeLogger(controllerId, inControllerContext = true, None), "someClusterId")
+        metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer

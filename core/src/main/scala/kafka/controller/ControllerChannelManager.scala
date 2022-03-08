@@ -51,7 +51,6 @@ class ControllerChannelManager(controllerContext: ControllerContext,
                                time: Time,
                                metrics: Metrics,
                                stateChangeLogger: StateChangeLogger,
-                               val clusterId: String,
                                threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   import ControllerChannelManager._
 
@@ -73,10 +72,10 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     controllerContext.liveOrShuttingDownBrokers.foreach(addNewBroker)
 
     brokerLock synchronized {
-      info(s"GRR DEBUG:  about to iterate brokerStateInfo to start RequestSendThreads "
+      info(s"About to iterate brokerStateInfo to start RequestSendThreads "
           + s"(${brokerStateInfo.size - remoteControllerIds.size} local brokers, ${remoteControllerIds.size} "
           + "remote controllers)")
-      brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1, brokerState._2.requestSendThread))
+      brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1))
     }
     initBrokerResponseSensors()
   }
@@ -103,8 +102,6 @@ class ControllerChannelManager(controllerContext: ControllerContext,
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit = {
-    // GRR FIXME: should we instrument the time spent waiting for this lock (and its other 5 call sites)?
-    //   (would love to see histogram in active controller)
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
@@ -121,8 +118,8 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     // be careful here. Maybe the startup() API has already started the request send thread
     brokerLock synchronized {
       if (!brokerStateInfo.contains(broker.id)) {
-        addNewBroker(broker, true)
-        startRequestSendThread(broker.id, brokerStateInfo(broker.id).requestSendThread)
+        addNewBroker(broker)
+        startRequestSendThread(broker.id)
       }
     }
   }
@@ -139,17 +136,16 @@ class ControllerChannelManager(controllerContext: ControllerContext,
    * This is sent to a <em>remote</em> controller so it can, in turn, send its cluster updates to us.
    */
   // [might be a test-only method; will depend on how "real" configuration/discovery/recovery works out]
-//GRR FIXME:  make package-private
-  def getBrokerNode(brokerId: Int): Option[Node] = {
+  private[controller] def getBrokerNode(brokerId: Int): Option[Node] = {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
           val node = stateInfo.brokerNode
-          info(s"GRR DEBUG:  controller ${config.brokerId}'s Node info for brokerId=${brokerId} = ${node}")
+          info(s"Controller ${config.brokerId}'s Node info for brokerId=${brokerId} = ${node}")
           Some(node)
         case None =>
-          info(s"GRR DEBUG:  ControllerBrokerStateInfo on controllerId=${config.brokerId} for brokerId=${brokerId} DOES NOT EXIST ('offline'?)")
+          info(s"ControllerBrokerStateInfo on controllerId=${config.brokerId} for brokerId=${brokerId} DOES NOT EXIST ('offline'?)")
           None
       }
     }
@@ -162,13 +158,12 @@ class ControllerChannelManager(controllerContext: ControllerContext,
    * info from another controller.
    */
   // [might be a test-only method; will depend on how "real" configuration/discovery/recovery works out]
-//GRR FIXME:  make package-private
-  def addRemoteController(remoteBroker: Broker): Unit = {
-    info(s"GRR DEBUG:  controllerId=${config.brokerId} adding remote controller [${remoteBroker}] for FEDERATION INTER-CLUSTER REQUESTS and starting its RequestSendThread")
+  private[controller] def addRemoteController(remoteBroker: Broker): Unit = {
+    info(s"ControllerId=${config.brokerId} adding remote controller [${remoteBroker}] for FEDERATION INTER-CLUSTER REQUESTS and starting its RequestSendThread")
     brokerLock synchronized {
       if (!remoteControllerIds.contains(remoteBroker.id)) {
         addNewBroker(remoteBroker, false)
-        startRequestSendThread(remoteBroker.id, brokerStateInfo(remoteBroker.id).requestSendThread)
+        startRequestSendThread(remoteBroker.id)
       }
     }
   }
@@ -254,7 +249,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     )
 
     if (!isLocal) {
-      info(s"GRR DEBUG:  adding remote ${brokerNode} info (network client, message queue, request thread, etc.) to brokerStateInfo map for federation inter-cluster requests")
+      info(s"Adding remote ${brokerNode} info to brokerStateInfo map for federation inter-cluster requests")
       remoteControllerIds.add(broker.id)
     }
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
@@ -281,11 +276,10 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   }
 
-  protected def startRequestSendThread(brokerId: Int, requestThread: RequestSendThread): Unit = {
-    if (requestThread.getState == Thread.State.NEW) {
-      info(s"GRR DEBUG:  controllerId=${config.brokerId} starting RequestSendThread for brokerId=${brokerId}")
+  protected def startRequestSendThread(brokerId: Int): Unit = {
+    val requestThread = brokerStateInfo(brokerId).requestSendThread
+    if (requestThread.getState == Thread.State.NEW)
       requestThread.start()
-    }
   }
 }
 
@@ -528,7 +522,7 @@ class ControllerBrokerRequestBatch(config: KafkaConfig,
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean)
 
 abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
-                                                    val clusterId: String,
+                                                    val originClusterId: String,
                                                     controllerContext: ControllerContext,
                                                     stateChangeLogger: StateChangeLogger) extends  Logging {
   val controllerId: Int = config.brokerId
@@ -717,13 +711,12 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     if (updateMetadataRequestVersion >= 6) {
       // NOTE:  new flexible versions thing is for 7+ (which we don't check here), but UpdateMetadataRequest.Builder
       //   does check for it before attempting to call data.setClusterId(clusterId)
-      val conditionalClusterId: String = if (config.liFederationEnable) clusterId else null
       // We should create only one copy of UpdateMetadataRequest[.Builder] that should apply to all brokers.
       // The goal is to reduce memory footprint on the controller.
       val maxBrokerEpoch = controllerContext.maxBrokerEpoch
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
         AbstractControlRequest.UNKNOWN_BROKER_EPOCH, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava,
-        conditionalClusterId)
+        originClusterId)
 
       updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
         sendRequest(broker, updateMetadataRequest, (r: AbstractResponse) => {
@@ -748,7 +741,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         //   do we have some kind of "deferred update" list like elsewhere in the code, or ...?
         //   (all of this could be wrapped up in a method call to elsewhere, but not clear where would be best)
         controllerContext.getLiveOrShuttingDownRemoteControllerIds.foreach { remoteControllerId =>
-          info(s"GRR DEBUG:  local controllerId=${config.brokerId} sending updateMetadataRequest to remote controllerId=${remoteControllerId}")
+          info(s"Local controllerId=${config.brokerId} sending updateMetadataRequest to remote controllerId=${remoteControllerId}")
           sendRequest(remoteControllerId, updateMetadataRequest, (r: AbstractResponse) => {
             val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
             sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, remoteControllerId))
@@ -761,7 +754,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
           brokerEpoch, AbstractControlRequest.UNKNOWN_BROKER_EPOCH, partitionStates.asJava, liveBrokers.asJava,
-          clusterId)
+          originClusterId)
         sendRequest(broker, updateMetadataRequest, (r: AbstractResponse) => {
           val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
           sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
@@ -849,34 +842,22 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
    * @param umr      the (rewritten) remote update metadata request itself
    */
   def sendRemoteRequestToBrokers(brokerIds: Seq[Int], umr: UpdateMetadataRequest): Unit = {
-    updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
     try {
-/*
-      GRR FIXME:  do we want/need any kind of trace-level logging like this for remote requests?
-      val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerEpoch)
-      <loop over partition states>
-        stateChangeLog.trace(s"Sending remote UpdateMetadataRequest $partitionState to " +
-          s"brokers $updateMetadataRequestBrokerSet for partition $tp")
-      <end loop over partition states>
- */
-
       // note that our caller already updated umr's controllerEpoch field (as well as others), so no need for that here
       val updateMetadataRequestBuilder = new UpdateMetadataRequest.WrappingBuilder(umr)
-      updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach {
+      brokerIds.foreach {
         broker => sendRequest(broker, updateMetadataRequestBuilder)
       }
-
     } catch {
       case e: Throwable =>
-        if (updateMetadataRequestBrokerSet.nonEmpty) {
+        if (brokerIds.nonEmpty) {
           // GRR FIXME:  do we need any kind of detailed "current state" info from umr here (as in
           //   sendRequestsToBrokers() above)?
           error(s"Haven't been able to forward remote metadata update requests to brokers " +
-            s"$updateMetadataRequestBrokerSet. Exception message: $e")
+            s"$brokerIds. Exception message: $e")
         }
         throw new IllegalStateException(e)
     }
-    updateMetadataRequestBrokerSet.clear()
   }
 } // end of abstract class AbstractControllerBrokerRequestBatch
 

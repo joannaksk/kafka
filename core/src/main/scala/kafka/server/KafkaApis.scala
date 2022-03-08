@@ -332,8 +332,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     quotas.clientQuotaCallback.foreach { callback =>
-      // GRR FIXME (LIKAFKA-42886):  clusterId arg in here is probably wrong for remote UMRs, but need to see what
-      //   callback.updateClusterMetadata() actually does with it
       if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
         quotas.fetch.updateQuotaMetricConfigs()
         quotas.produce.updateQuotaMetricConfigs()

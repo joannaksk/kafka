@@ -110,7 +110,7 @@ class KafkaController(val config: KafkaConfig,
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
-    stateChangeLogger, clusterId, threadNamePrefix)
+    stateChangeLogger, threadNamePrefix)
 
   // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
   // visible for testing
@@ -332,89 +332,6 @@ class KafkaController(val config: KafkaConfig,
     controllerContext.addRemoteControllers(Set(broker.id))
   }
 
-
-  /**
-   * Invoked by doHandleUpdateMetadataRequest() in KafkaApis when the request is NOT locally sourced (i.e.,
-   * neither a native, ZK-originated update nor an already rewritten remote one that's ready for local
-   * distribution).  In other words, the request is fresh off the boat from a remote controller, and we
-   * need to sanity-check it, rewrite it, and submit it (or resubmit it, in our own case) to all outgoing
-   * local-broker queues.
-   */
-  def rewriteAndForwardRemoteUpdateMetadataRequest(umr: UpdateMetadataRequest): UpdateMetadataResponse = {
-
-    // Upstream caller has already verified that originClusterId doesn't match our own AND routingClusterId doesn't
-    // match (null or mismatch), i.e., this is a remote, incoming request (or a bug).
-
-    // OPERABILITY TODO (longer-term):  would be good to associate a (persistent) color with each physical cluster
-    // and include it in logging (and probably also in some znode) => more human-memorable than random UUID strings
-    // (though might be tricky to consistently and persistently associate a _unique_ color with each cluster in the
-    // federation...hmmm)
-    // [LIKAFKA-42834:  do same thing for federation overall => refuse to talk to remote controller if its federation
-    //  ID-string doesn't match our own:  useful sanity check]
-
-    info(s"GRR DEBUG: controller for clusterId=${clusterId} has received a remote, non-rewritten UpdateMetadataRequest "
-        + s"(UMR clusterId=${umr.originClusterId}, routingClusterId=${umr.routingClusterId}), and li.federation.enable="
-        + s"${config.liFederationEnable}: about to validate and rewrite it")
-
-    if (!config.liFederationEnable) {  // is this even possible?  KafkaApis shouldn't call us unless federation == true
-      // GRR TODO:  increment some (new?) error metric
-      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
-      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.originClusterId} " +
-        s"with routingClusterId=${umr.routingClusterId}, but li.federation.enable=${config.liFederationEnable}")
-    }
-
-    if (umr.routingClusterId != null && umr.routingClusterId != clusterId) {
-      // GRR TODO:  increment some (new?) error metric
-      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
-      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received rewritten UpdateMetadataRequest from clusterId=${umr.originClusterId}, " +
-        s"but routingClusterId=${umr.routingClusterId} does not match us (clusterId=${clusterId})")
-    }
-    // KafkaApis already handled the umr.routingClusterId == clusterId case, so at this point we know
-    // umr.routingClusterId == null and can safely rewrite it
-
-    // GRR FIXME:  should we refresh the preferred-controller list first?  presumably it's latency-expensive...
-    //controllerContext.setLivePreferredControllerIds(zkClient.getPreferredControllerList.toSet)
-    if (!config.preferredController) {
-      // GRR TODO:  increment some (new?) error metric
-      // GRR FIXME:  do we need to log the exception message separately?  not sure what preferred pattern is
-      // GRR FIXME:  should we return an error-UpdateMetadataResponse instead of throwing?  what's correct pattern?
-      throw new IllegalStateException(s"Received UpdateMetadataRequest from clusterId=${umr.originClusterId} " +
-        s"(we're clusterId=${clusterId}), but we're not a preferred controller")
-    }
-
-    // At this point we know routingClusterId == null and we're a controller node (maybe not active, but preferred).
-    // Both active and inactive preferred controllers (i.e., everybody who receives this request) need to cache
-    // the remote data (in "firewalled" data structures) in order to serve it but not otherwise act on it.
-
-    // GRR TODO:  remote-controller metadata is cached within channel manager, but need to verify (or ensure) that
-    //   admin operations requested of local controller don't result in action against remote controllers, only
-    //   local brokers
-
-    // FIXME?  is there an isActive race condition here such that a remote request could get dropped if
-    //   a non-active/leader controller becomes the leader right around the time both old and new leaders
-    //   are checking this conditional?  [no, should be safe:  newly active controller will be proactively
-    //   sent full metadata dumps by all remote controllers, even if they're newly active as well:  see
-    //   startup/failover section of design doc]
-    if (isActive) {  // rewrite request and stuff it back into "the queue" (whatever/wherever that is)
-      // rewrite request (in place)
-      umr.rewriteRemoteRequest(
-          clusterId,
-          brokerInfo.broker.id,    // Lucas:  this is our own controllerId, right?
-          controllerContext.epoch, // Lucas:  this is our own controllerEpoch, right?
-          controllerContext.maxBrokerEpoch)
-
-      // resubmit request to local-broker queues ONLY (NOT to remote controllers)
-      info("Sending rewritten remote update metadata request to local brokers") // " from ..." GRR FIXME
-      val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
-      sendRemoteUpdateMetadataRequest(liveBrokers, umr)
-    }
-    // GRR:  no "else" case (non-leader-specific code) as far as I know
-
-    new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code))
-  }
-
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
     zkClient.updateBrokerInfo(newBrokerInfo)
@@ -516,7 +433,6 @@ class KafkaController(val config: KafkaConfig,
   /**
    * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
    * required to clean up internal controller data structures
-   * [FIXME?  also called unilaterally by KafkaServer main thread, and NOT thread-safe...]
    */
   private def onControllerResignation(): Unit = {
     debug("Resigning")
@@ -1280,7 +1196,7 @@ class KafkaController(val config: KafkaConfig,
 
   /**
    * Send the leader information for selected partitions to selected brokers so that they can correctly respond to
-   * metadata requests.
+   * metadata requests
    *
    * @param partitions The topic-partitions whose metadata should be sent
    * @param brokers The brokers that the update metadata request should be sent to
@@ -1309,7 +1225,7 @@ class KafkaController(val config: KafkaConfig,
       brokerRequestBatch.sendRemoteRequestToBrokers(brokers, umr)
     } catch {
       case e: IllegalStateException =>
-        info(s"GRR DEBUG:  sendRemoteUpdateMetadataRequest(): caught exception while sanity-checking for new batch or forwarding remote request to local brokers", e)
+        info(s"sendRemoteUpdateMetadataRequest(): caught exception while sanity-checking for new batch or forwarding remote request to local brokers", e)
         handleIllegalState(e)
     }
   }

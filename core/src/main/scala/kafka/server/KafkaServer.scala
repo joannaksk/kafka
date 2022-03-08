@@ -696,8 +696,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (dataPlaneRequestProcessor != null)
           CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-//APPARENT BUG:  should loop over controlPlaneRequestHandlerPool and close all of them, right?
-// (socketServer.controlPlaneRequestChannelOpt.foreach ...)
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
         CoreUtils.swallow(authorizer.foreach(_.close()), this)
@@ -777,7 +775,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     if (kafkaController != null) {
       kafkaController.getBrokerNode(brokerId)
     } else {
-      warn(s"GRR DEBUG:  cannot look up broker Node info because controller is null?!?")
+      warn(s"Cannot look up broker Node info because controller is null?!?")
       None
     }
   }
@@ -793,7 +791,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     if (kafkaController != null) {
       kafkaController.addRemoteController(broker)
     } else {
-      warn(s"GRR DEBUG:  cannot add remote controller ${broker} to null local controller!")
+      warn(s"Cannot add remote controller ${broker} to null local controller!")
     }
   }
 

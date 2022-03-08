@@ -67,18 +67,18 @@ class FederatedMetadataCache(brokerId: Int, localClusterId: String = "defaultClu
       // populate each new envelope-map with all clusters' brokers/nodes, except for the cluster in the UMR:
       mcMetadataSnapshot.multiClusterAliveBrokers.keys.foreach { clusterId =>
         if (!clusterId.equals(updateMetadataRequest.originClusterId)) {
-          info(s"GRR DEBUG: updateMetadata(): copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.originClusterId} brokers")
+          info(s"updateMetadata(): copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.originClusterId} brokers")
           multiClusterAliveBrokers(clusterId) = mcMetadataSnapshot.multiClusterAliveBrokers(clusterId)
         } else {
-          info(s"GRR DEBUG: updateMetadata(): NOT copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is replacing those")
+          info(s"updateMetadata(): NOT copying existing clusterId=${clusterId} brokers to new snapshot since UpdateMetadataRequest is replacing those")
         }
       }
       mcMetadataSnapshot.multiClusterAliveNodes.keys.foreach { clusterId =>
         if (!clusterId.equals(updateMetadataRequest.originClusterId)) {
-          info(s"GRR DEBUG: updateMetadata(): copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.originClusterId} nodes")
+          info(s"updateMetadata(): copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is updating clusterId=${updateMetadataRequest.originClusterId} nodes")
           multiClusterAliveNodes(clusterId) = mcMetadataSnapshot.multiClusterAliveNodes(clusterId)
         } else {
-          info(s"GRR DEBUG: updateMetadata(): NOT copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is replacing those")
+          info(s"updateMetadata(): NOT copying existing clusterId=${clusterId} nodes to new snapshot since UpdateMetadataRequest is replacing those")
         }
       }
 
@@ -104,7 +104,7 @@ class FederatedMetadataCache(brokerId: Int, localClusterId: String = "defaultClu
           case id => Some(id)
         }
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
-      val possiblyUpdatedPartitionStates = possiblyUpdatePartitionStates(updateMetadataRequest, deletedPartitions, correlationId)
+      val possiblyUpdatedPartitionStates = maybeUpdatePartitionStates(updateMetadataRequest, deletedPartitions, correlationId)
 
       metadataSnapshot = MultiClusterMetadataSnapshot(possiblyUpdatedPartitionStates, controllerId, multiClusterAliveBrokers, multiClusterAliveNodes)
 

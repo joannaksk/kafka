@@ -229,10 +229,6 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId
 
-  // GRR FIXME (LIKAFKA-42885):  sole caller = legacy (non-rewrite) half of doHandleUpdateMetadataRequest() in
-  //  KafkaApis; clusterId arg was already there...but might need to be omitted or modified or something for
-  //  federation case?  need to figure out how returned Cluster part is used (something about client quota
-  //  callback, so presumably we want clusterId in UMR, not that of local cluster)
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val snapshot = metadataSnapshot
     val nodes = snapshot.aliveNodes.map { case (id, nodes) => (id, nodes.get(listenerName).orNull) }
@@ -270,7 +266,7 @@ class MetadataCache(brokerId: Int) extends Logging {
           case id => Some(id)
         }
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
-      val possiblyUpdatedPartitionStates = possiblyUpdatePartitionStates(updateMetadataRequest, deletedPartitions, correlationId)
+      val possiblyUpdatedPartitionStates = maybeUpdatePartitionStates(updateMetadataRequest, deletedPartitions, correlationId)
 
       metadataSnapshot = SingleClusterMetadataSnapshot(possiblyUpdatedPartitionStates, controllerId, singleClusterAliveBrokers, singleClusterAliveNodes)
 
@@ -312,7 +308,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   // Conditional replacement of snapshot's partitionStates (might be a full update, a partial update, or no update);
   // called under lock.
-  protected def possiblyUpdatePartitionStates(
+  protected def maybeUpdatePartitionStates(
       updateMetadataRequest: UpdateMetadataRequest,
       deletedPartitions: mutable.ArrayBuffer[TopicPartition],
       correlationId: Int):
@@ -329,18 +325,20 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
       val controllerId = updateMetadataRequest.controllerId
       val controllerEpoch = updateMetadataRequest.controllerEpoch
+      val originClusterId = updateMetadataRequest.originClusterId()
       updateMetadataRequest.partitionStates.asScala.foreach { info =>
         val tp = new TopicPartition(info.topicName, info.partitionIndex)
         if (info.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(partitionStates, tp.topic, tp.partition)
-//GRR TODO:  for federation case, enhance both of these logs with "cluster ${clusterId} ":
           stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
-            s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+            s"request sent by controller $controllerId epoch $controllerEpoch of origin cluster $originClusterId " +
+            s"with correlation id $correlationId")
           deletedPartitions += tp
         } else {
           addOrUpdatePartitionInfo(partitionStates, tp.topic, tp.partition, info)
           stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to UpdateMetadata " +
-            s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+            s"request sent by controller $controllerId epoch $controllerEpoch of origin cluster $originClusterId" +
+            s"with correlation id $correlationId")
         }
       }
       partitionStates
