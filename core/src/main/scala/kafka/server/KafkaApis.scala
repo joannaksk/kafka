@@ -317,7 +317,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def shouldForwardUpdateMetadataRequest(updateMetadataRequest: UpdateMetadataRequest): Boolean = {
-    config.liFederationEnable && clusterId.equals(updateMetadataRequest.originClusterId()) && updateMetadataRequest.routingClusterId() == null
+    config.liFederationEnable && !clusterId.equals(updateMetadataRequest.originClusterId()) && updateMetadataRequest.routingClusterId() == null
   }
 
   // [unlike the other "doHandle..." methods, this one DOES use the request arg]
