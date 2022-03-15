@@ -17,6 +17,14 @@
 
 package kafka.server
 
+import java.io.File
+import java.net.InetAddress
+import java.nio.file.Files
+import java.util
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.stream.IntStream
+import java.util.{Collections, Optional, Properties}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -26,7 +34,8 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import org.apache.kafka.common.message.{FetchResponseData, LeaderAndIsrRequestData}
+import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -43,7 +52,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
-import org.apache.kafka.image._
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
@@ -53,14 +62,6 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentMatchers, Mockito}
 
-import java.io.File
-import java.net.InetAddress
-import java.nio.file.Files
-import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.stream.IntStream
-import java.util.{Collections, Optional, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
