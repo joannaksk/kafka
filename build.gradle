@@ -42,7 +42,9 @@ buildscript {
     classpath libs.jaxbApi
   }
 }
-
+plugins {
+    id "org.sonarqube" version "3.3"
+}
 apply plugin: "com.diffplug.gradle.spotless"
 spotless {
   scala {
@@ -50,7 +52,6 @@ spotless {
     scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
   }
 }
-
 
 allprojects {
 
