@@ -39,6 +39,7 @@ buildscript {
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
+    classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:$versions.sonarqube"
     classpath libs.jaxbApi
   }
 }
@@ -580,6 +581,15 @@ subprojects {
         xml.enabled = true
         csv.enabled = false
       }
+    }
+  }
+
+  apply plugin: "org.sonarqube"
+
+  sonarqube {
+    properties {
+      property "sonar.projectName", "LinkedIn Kafka"
+      property "sonar.projectKey", "kafka"
     }
   }
 
