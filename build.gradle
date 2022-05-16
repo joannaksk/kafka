@@ -310,6 +310,11 @@ subprojects {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
     }
+
+    filter {
+      //exclude all tests from a package.
+      excludeTestsMatching "org.apache.kafka.clients.producer.KafkaProducerTest.*"
+    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
