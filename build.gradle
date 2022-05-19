@@ -40,6 +40,7 @@ buildscript {
     classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
     classpath "info.solidsoft.gradle.pitest:gradle-pitest-plugin:$versions.pitest"
+    classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:$versions.sonarqube"
     classpath libs.jaxbApi
   }
 }
@@ -1056,6 +1057,13 @@ project(':generator') {
 
 project(':clients') {
   archivesBaseName = "kafka-clients"
+  apply plugin: "org.sonarqube"
+
+  sonarqube {
+    properties {
+      property 'sonar.coverage.jacoco.xmlReportPaths', "$projectDir.parentFile.path/clients/build/reports/jacoco/test/jacocoTestReport.xml"
+    }
+  }
 
   configurations {
     jacksonDatabindConfig

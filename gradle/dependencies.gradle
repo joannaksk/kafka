@@ -121,7 +121,8 @@ versions += [
   zstd: "1.4.3-1",
   conscrypt: "2.1.0",
   netty: "4.1.49.Final",
-  pitest: "1.7.4"
+  pitest: "1.7.4",
+  sonarqube:"3.3"
 ]
 
 libs += [
