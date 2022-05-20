@@ -177,8 +177,8 @@ subprojects {
   apply plugin: 'info.solidsoft.pitest'
 
   pitest {
-    targetClasses = ['org.apache.kafka.common.security.authenticator.*']  //by default "${project.group}.*"
-    targetTests = ['org.apache.kafka.common.security.authenticator.*']
+    targetClasses = ['org.apache.kafka.common.requests.*']  //by default "${project.group}.*"
+    targetTests = ['org.apache.kafka.common.requests.*']
     pitestVersion = '1.7.4' //not needed when a default PIT version should be used
     threads = 4
     outputFormats = ['XML', 'HTML']
