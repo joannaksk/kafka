@@ -791,8 +791,8 @@ public class SaslAuthenticatorTest {
         assertEquals("It is not possible to easily bump SASL_HANDSHAKE schema"
                         + " due to improper version negotiation in clients < 2.5."
                         + " Please see https://issues.apache.org/jira/browse/KAFKA-9577",
-                ApiKeys.SASL_HANDSHAKE.latestVersion(),
-                1);
+                1,
+                ApiKeys.SASL_HANDSHAKE.latestVersion());
     }
 
     /**

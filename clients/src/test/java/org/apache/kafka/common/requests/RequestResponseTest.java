@@ -862,22 +862,21 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
-                CreateTopicsRequestData data = new CreateTopicsRequestData()
-                    .setTimeoutMs(123)
-                    .setValidateOnly(false);
-                data.topics().add(new CreatableTopic().
-                    setName("foo").
-                    setNumPartitions(CreateTopicsRequest.NO_NUM_PARTITIONS).
-                    setReplicationFactor((short) 1));
-                data.topics().add(new CreatableTopic().
-                    setName("bar").
-                    setNumPartitions(1).
-                    setReplicationFactor(CreateTopicsRequest.NO_REPLICATION_FACTOR));
+        CreateTopicsRequestData data = new CreateTopicsRequestData()
+                .setTimeoutMs(123)
+                .setValidateOnly(false);
+        data.topics().add(new CreatableTopic().
+                setName("foo").
+                setNumPartitions(CreateTopicsRequest.NO_NUM_PARTITIONS).
+                setReplicationFactor((short) 1));
+        data.topics().add(new CreatableTopic().
+                setName("bar").
+                setNumPartitions(1).
+                setReplicationFactor(CreateTopicsRequest.NO_REPLICATION_FACTOR));
+        Builder builder = new Builder(data);
 
-                new Builder(data).build((short) 3);
-            });
+        final UnsupportedVersionException exception = assertThrows(
+            UnsupportedVersionException.class, () -> builder.build((short) 3));
         assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
         assertTrue(exception.getMessage().contains("[foo, bar]"));
     }
