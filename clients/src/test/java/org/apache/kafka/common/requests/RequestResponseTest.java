@@ -180,17 +180,25 @@ public class RequestResponseTest {
     private String logDir = "logDir";
 
     @Test
-    public void testSerialization() throws Exception {
+    public void testSerializationFindCoordinator() throws Exception {
         checkRequest(createFindCoordinatorRequest(0), true);
         checkRequest(createFindCoordinatorRequest(1), true);
         checkErrorResponse(createFindCoordinatorRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createFindCoordinatorRequest(1), new UnknownServerException(), true);
         checkResponse(createFindCoordinatorResponse(), 0, true);
         checkResponse(createFindCoordinatorResponse(), 1, true);
+    }
+
+    @Test
+    public void testSerializationControlledShutdown() {
         checkRequest(createControlledShutdownRequest(), true);
         checkResponse(createControlledShutdownResponse(), 1, true);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException(), true);
         checkErrorResponse(createControlledShutdownRequest(0), new UnknownServerException(), true);
+    }
+
+    @Test
+    public void testSerializationFetch() {
         checkRequest(createFetchRequest(4), true);
         checkResponse(createFetchResponse(), 4, true);
         List<TopicPartition> toForgetTopics = new ArrayList<>();
@@ -201,30 +209,70 @@ public class RequestResponseTest {
         checkResponse(createFetchResponse(123), 7, true);
         checkResponse(createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123), 7, true);
         checkErrorResponse(createFetchRequest(4), new UnknownServerException(), true);
+    }
+
+    @Test
+    public void testSerializationHeartBeat() {
         checkRequest(createHeartBeatRequest(), true);
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException(), true);
         checkResponse(createHeartBeatResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationJoinGroup() {
         checkRequest(createJoinGroupRequest(1), true);
         checkErrorResponse(createJoinGroupRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createJoinGroupRequest(1), new UnknownServerException(), true);
         checkResponse(createJoinGroupResponse(), 0, true);
+
+
+        checkRequest(createJoinGroupRequest(0), true);
+    }
+
+    @Test
+    public void testSerializationLeaveGroup() {
         checkRequest(createLeaveGroupRequest(), true);
         checkErrorResponse(createLeaveGroupRequest(), new UnknownServerException(), true);
         checkResponse(createLeaveGroupResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationListGroups() {
         checkRequest(createListGroupsRequest(), true);
         checkErrorResponse(createListGroupsRequest(), new UnknownServerException(), true);
         checkResponse(createListGroupsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationDescribeGroup() {
         checkRequest(createDescribeGroupRequest(), true);
         checkErrorResponse(createDescribeGroupRequest(), new UnknownServerException(), true);
         checkResponse(createDescribeGroupResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationDeleteGroups() {
         checkRequest(createDeleteGroupsRequest(), true);
         checkErrorResponse(createDeleteGroupsRequest(), new UnknownServerException(), true);
         checkResponse(createDeleteGroupsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationListOffset() throws Exception {
         for (int i = 0; i < ApiKeys.LIST_OFFSETS.latestVersion(); i++) {
             checkRequest(createListOffsetRequest(i), true);
             checkErrorResponse(createListOffsetRequest(i), new UnknownServerException(), true);
             checkResponse(createListOffsetResponse(i), i, true);
         }
+
+
+        checkRequest(createListOffsetRequest(0), true);
+        checkErrorResponse(createListOffsetRequest(0), new UnknownServerException(), true);
+        checkResponse(createListOffsetResponse(0), 0, true);
+    }
+
+    @Test
+    public void testSerializationMetadata() throws Exception {
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2), true);
         checkRequest(createMetadataRequest(1, Collections.singletonList("topic1")), true);
         checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
@@ -234,6 +282,15 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 4, true);
         checkErrorResponse(createMetadataRequest(4, Collections.singletonList("topic1")), new UnknownServerException(), true);
+
+
+        checkResponse(createMetadataResponse(), 0, true);
+        checkResponse(createMetadataResponse(), 1, true);
+        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
+    }
+
+    @Test
+    public void testSerializationOffsetFetch() throws Exception {
         checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
         checkErrorResponse(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), new NotCoordinatorException("Not Coordinator"), true);
         checkRequest(createOffsetFetchRequest(0), true);
@@ -244,12 +301,20 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetFetchRequest(1), new UnknownServerException(), true);
         checkErrorResponse(createOffsetFetchRequest(2), new UnknownServerException(), true);
         checkResponse(createOffsetFetchResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationProduce() {
         checkRequest(createProduceRequest(2), true);
         checkErrorResponse(createProduceRequest(2), new UnknownServerException(), true);
         checkRequest(createProduceRequest(3), true);
         checkErrorResponse(createProduceRequest(3), new UnknownServerException(), true);
         checkResponse(createProduceResponse(), 2, true);
         checkResponse(createProduceResponseWithErrorMessage(), 8, true);
+    }
+
+    @Test
+    public void testSerializationStopReplica() {
         checkRequest(createStopReplicaRequest(0, true), true);
         checkRequest(createStopReplicaRequest(0, false), true);
         checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException(), true);
@@ -257,6 +322,10 @@ public class RequestResponseTest {
         checkRequest(createStopReplicaRequest(1, false), true);
         checkErrorResponse(createStopReplicaRequest(1, true), new UnknownServerException(), true);
         checkResponse(createStopReplicaResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationLeaderAndIsr() throws Exception {
         checkRequest(createLeaderAndIsrRequest(0), true);
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
@@ -264,13 +333,25 @@ public class RequestResponseTest {
         checkRequest(createLeaderAndIsrRequest(2), true);
         checkErrorResponse(createLeaderAndIsrRequest(2), new UnknownServerException(), false);
         checkResponse(createLeaderAndIsrResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationSaslHandshake() {
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException(), true);
         checkResponse(createSaslHandshakeResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationSaslAuthenticate() {
         checkRequest(createSaslAuthenticateRequest(), true);
         checkErrorResponse(createSaslAuthenticateRequest(), new UnknownServerException(), true);
         checkResponse(createSaslAuthenticateResponse(), 0, true);
         checkResponse(createSaslAuthenticateResponse(), 1, true);
+    }
+
+    @Test
+    public void testSerializationApiVersion() {
         checkRequest(createApiVersionRequest(), true);
         checkErrorResponse(createApiVersionRequest(), new UnknownServerException(), true);
         checkErrorResponse(createApiVersionRequest(), new UnsupportedVersionException("Not Supported"), true);
@@ -282,41 +363,99 @@ public class RequestResponseTest {
         checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 1, true);
         checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 2, true);
         checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 3, true);
+    }
 
+    @Test
+    public void testSerializationCreateTopic() {
         checkRequest(createCreateTopicRequest(0), true);
         checkErrorResponse(createCreateTopicRequest(0), new UnknownServerException(), true);
         checkResponse(createCreateTopicResponse(), 0, true);
         checkRequest(createCreateTopicRequest(1), true);
         checkErrorResponse(createCreateTopicRequest(1), new UnknownServerException(), true);
         checkResponse(createCreateTopicResponse(), 1, true);
+    }
+
+    @Test
+    public void testSerializationDeleteTopics() {
         checkRequest(createDeleteTopicsRequest(), true);
         checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException(), true);
         checkResponse(createDeleteTopicsResponse(), 0, true);
+    }
 
+    @Test
+    public void testSerializationInitPid() {
         checkRequest(createInitPidRequest(), true);
         checkErrorResponse(createInitPidRequest(), new UnknownServerException(), true);
         checkResponse(createInitPidResponse(), 0, true);
+    }
 
+    @Test
+    public void testSerializationAddPartitionsToTxn() {
         checkRequest(createAddPartitionsToTxnRequest(), true);
         checkResponse(createAddPartitionsToTxnResponse(), 0, true);
         checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
+
+
+        checkRequest(createAddPartitionsToTxnRequest(), true);
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
+        checkResponse(createAddPartitionsToTxnResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationAddOffsetsToTxn() {
         checkRequest(createAddOffsetsToTxnRequest(), true);
         checkResponse(createAddOffsetsToTxnResponse(), 0, true);
         checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
+
+
+        checkRequest(createAddOffsetsToTxnRequest(), true);
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
+        checkResponse(createAddOffsetsToTxnResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationEndTxn() {
         checkRequest(createEndTxnRequest(), true);
         checkResponse(createEndTxnResponse(), 0, true);
         checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
+
+
+        checkRequest(createEndTxnRequest(), true);
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
+        checkResponse(createEndTxnResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationWriteTxnMarkers() {
         checkRequest(createWriteTxnMarkersRequest(), true);
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
         checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
+
+
+        checkRequest(createWriteTxnMarkersRequest(), true);
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
+        checkResponse(createWriteTxnMarkersResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationTxnOffsetCommit() {
         checkRequest(createTxnOffsetCommitRequest(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
         checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
 
+
+        checkRequest(createTxnOffsetCommitRequest(), true);
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
+        checkResponse(createTxnOffsetCommitResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationOlderFetchVersions() throws Exception {
         checkOlderFetchVersions();
-        checkResponse(createMetadataResponse(), 0, true);
-        checkResponse(createMetadataResponse(), 1, true);
-        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
+    }
+
+    @Test
+    public void testSerializationOffsetCommit() throws Exception {
         checkRequest(createOffsetCommitRequest(0), true);
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException(), true);
         checkRequest(createOffsetCommitRequest(1), true);
@@ -331,7 +470,10 @@ public class RequestResponseTest {
         checkRequest(createOffsetCommitRequest(5), true);
         checkErrorResponse(createOffsetCommitRequest(5), new UnknownServerException(), true);
         checkResponse(createOffsetCommitResponse(), 5, true);
-        checkRequest(createJoinGroupRequest(0), true);
+    }
+
+    @Test
+    public void testSerializationUpdateMetadata() {
         checkRequest(createUpdateMetadataRequest(0, null), false);
         checkErrorResponse(createUpdateMetadataRequest(0, null), new UnknownServerException(), true);
         checkRequest(createUpdateMetadataRequest(1, null), false);
@@ -350,40 +492,50 @@ public class RequestResponseTest {
         checkRequest(createUpdateMetadataRequest(5, null), false);
         checkErrorResponse(createUpdateMetadataRequest(5, "rack1"), new UnknownServerException(), true);
         checkResponse(createUpdateMetadataResponse(), 0, true);
-        checkRequest(createListOffsetRequest(0), true);
-        checkErrorResponse(createListOffsetRequest(0), new UnknownServerException(), true);
-        checkResponse(createListOffsetResponse(0), 0, true);
+    }
+
+    @Test
+    public void testSerializationLeaderEpoch() {
         checkRequest(createLeaderEpochRequestForReplica(0, 1), true);
         checkRequest(createLeaderEpochRequestForConsumer(), true);
         checkResponse(createLeaderEpochResponse(), 0, true);
         checkErrorResponse(createLeaderEpochRequestForConsumer(), new UnknownServerException(), true);
-        checkRequest(createAddPartitionsToTxnRequest(), true);
-        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
-        checkResponse(createAddPartitionsToTxnResponse(), 0, true);
-        checkRequest(createAddOffsetsToTxnRequest(), true);
-        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
-        checkResponse(createAddOffsetsToTxnResponse(), 0, true);
-        checkRequest(createEndTxnRequest(), true);
-        checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
-        checkResponse(createEndTxnResponse(), 0, true);
-        checkRequest(createWriteTxnMarkersRequest(), true);
-        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
-        checkResponse(createWriteTxnMarkersResponse(), 0, true);
-        checkRequest(createTxnOffsetCommitRequest(), true);
-        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
-        checkResponse(createTxnOffsetCommitResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationListAcls() {
         checkRequest(createListAclsRequest(), true);
         checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
+    }
+
+    @Test
+    public void testSerializationDescribeAcls() {
         checkResponse(createDescribeAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion(), true);
+    }
+
+    @Test
+    public void testSerializationCreateAcls() {
         checkRequest(createCreateAclsRequest(), true);
         checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
         checkResponse(createCreateAclsResponse(), ApiKeys.CREATE_ACLS.latestVersion(), true);
+    }
+
+    @Test
+    public void testSerializationDeleteAcls() {
         checkRequest(createDeleteAclsRequest(), true);
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
         checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion(), true);
+    }
+
+    @Test
+    public void testSerializationAlterConfigs() {
         checkRequest(createAlterConfigsRequest(), false);
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException(), true);
         checkResponse(createAlterConfigsResponse(), 0, false);
+    }
+
+    @Test
+    public void testSerializationDescribeConfigs() throws Exception {
         checkRequest(createDescribeConfigsRequest(0), true);
         checkRequest(createDescribeConfigsRequestWithConfigEntries(0), false);
         checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException(), true);
@@ -393,35 +545,75 @@ public class RequestResponseTest {
         checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException(), true);
         checkResponse(createDescribeConfigsResponse(), 1, false);
         checkDescribeConfigsResponseVersions();
+    }
+
+    @Test
+    public void testSerializationCreatePartitions() throws Exception {
         checkRequest(createCreatePartitionsRequest(), true);
         checkRequest(createCreatePartitionsRequestWithAssignments(), false);
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException(), true);
         checkResponse(createCreatePartitionsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationCreateToken() {
         checkRequest(createCreateTokenRequest(), true);
         checkErrorResponse(createCreateTokenRequest(), new UnknownServerException(), true);
         checkResponse(createCreateTokenResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationDescribeToken() {
         checkRequest(createDescribeTokenRequest(), true);
         checkErrorResponse(createDescribeTokenRequest(), new UnknownServerException(), true);
         checkResponse(createDescribeTokenResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationExpireToken() {
         checkRequest(createExpireTokenRequest(), true);
         checkErrorResponse(createExpireTokenRequest(), new UnknownServerException(), true);
         checkResponse(createExpireTokenResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationRenewToken() {
         checkRequest(createRenewTokenRequest(), true);
         checkErrorResponse(createRenewTokenRequest(), new UnknownServerException(), true);
         checkResponse(createRenewTokenResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationElectLeaders() {
         checkRequest(createElectLeadersRequest(), true);
         checkRequest(createElectLeadersRequestNullPartitions(), true);
         checkErrorResponse(createElectLeadersRequest(), new UnknownServerException(), true);
         checkResponse(createElectLeadersResponse(), 1, true);
+    }
+
+    @Test
+    public void testSerializationIncrementalAlterConfigs() {
         checkRequest(createIncrementalAlterConfigsRequest(), true);
         checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException(), true);
         checkResponse(createIncrementalAlterConfigsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationAlterPartitionReassignment() {
         checkRequest(createAlterPartitionReassignmentsRequest(), true);
         checkErrorResponse(createAlterPartitionReassignmentsRequest(), new UnknownServerException(), true);
         checkResponse(createAlterPartitionReassignmentsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationListPartitionReassignments() throws Exception {
         checkRequest(createListPartitionReassignmentsRequest(), true);
         checkErrorResponse(createListPartitionReassignmentsRequest(), new UnknownServerException(), true);
         checkResponse(createListPartitionReassignmentsResponse(), 0, true);
+    }
+
+    @Test
+    public void testSerializationOffsetDelete() {
         checkRequest(createOffsetDeleteRequest(), true);
         checkErrorResponse(createOffsetDeleteRequest(), new UnknownServerException(), true);
         checkResponse(createOffsetDeleteResponse(), 0, true);
