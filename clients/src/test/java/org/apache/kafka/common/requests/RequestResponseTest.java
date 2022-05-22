@@ -2213,8 +2213,9 @@ public class RequestResponseTest {
     /**
      * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
      */
+    // Responses starting with letter A.
     @Test
-    public void testErrorCountsIncludesNone() {
+    public void testErrorCountsIncludesNoneA() {
         assertEquals(Integer.valueOf(1), createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAddPartitionsToTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
@@ -2222,11 +2223,21 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letter C.
+    @Test
+    public void testErrorCountsIncludesNoneC() {
         assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreateAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreateTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreateTopicResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letter D.
+    @Test
+    public void testErrorCountsIncludesNoneD() {
         assertEquals(Integer.valueOf(1), createDeleteAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createDeleteGroupsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createDeleteTopicsResponse().errorCounts().get(Errors.NONE));
@@ -2235,32 +2246,83 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(2), createDescribeConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createDescribeGroupResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createDescribeTokenResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letter E.
+    @Test
+    public void testErrorCountsIncludesNoneE() {
         assertEquals(Integer.valueOf(2), createElectLeadersResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createEndTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createExpireTokenResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letter F.
+    @Test
+    public void testErrorCountsIncludesNoneF() {
         assertEquals(Integer.valueOf(3), createFetchResponse(123).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createFindCoordinatorResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letters H,I, and J.
+    @Test
+    public void testErrorCountsIncludesNoneHIJ() {
+        // H
         assertEquals(Integer.valueOf(1), createHeartBeatResponse().errorCounts().get(Errors.NONE));
+
+        // I
         assertEquals(Integer.valueOf(1), createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
+
+        // J
         assertEquals(Integer.valueOf(1), createJoinGroupResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letters L and M.
+    @Test
+    public void testErrorCountsIncludesNoneLM() {
+        // L
         assertEquals(Integer.valueOf(2), createLeaderAndIsrResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(3), createLeaderEpochResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createLeaveGroupResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createListGroupsResponse().errorCounts().get(Errors.NONE));
-        assertEquals(Integer.valueOf(1), createListOffsetResponse(LIST_OFFSETS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListOffsetResponse(LIST_OFFSETS.latestVersion()).errorCounts()
+                .get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createListPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
+
+        //M
         assertEquals(Integer.valueOf(2), createMetadataResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letters O, P, and R.
+    @Test
+    public void testErrorCountsIncludesNoneOPR() {
+        // O
         assertEquals(Integer.valueOf(1), createOffsetCommitResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createOffsetDeleteResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(3), createOffsetFetchResponse().errorCounts().get(Errors.NONE));
+
+        // P
         assertEquals(Integer.valueOf(1), createProduceResponse().errorCounts().get(Errors.NONE));
+
+        // R
         assertEquals(Integer.valueOf(1), createRenewTokenResponse().errorCounts().get(Errors.NONE));
+    }
+
+    // Responses starting with letters S, T, U, and W.
+    @Test
+    public void testErrorCountsIncludesNoneSTUW() {
+        // S
         assertEquals(Integer.valueOf(1), createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSaslHandshakeResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createStopReplicaResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSyncGroupResponse(SYNC_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
+
+        // T
         assertEquals(Integer.valueOf(1), createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
+
+        // U
         assertEquals(Integer.valueOf(1), createUpdateMetadataResponse().errorCounts().get(Errors.NONE));
+
+        // W
         assertEquals(Integer.valueOf(1), createWriteTxnMarkersResponse().errorCounts().get(Errors.NONE));
     }
 }
