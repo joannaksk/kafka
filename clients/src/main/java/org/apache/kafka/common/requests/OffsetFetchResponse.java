@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -188,7 +189,7 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        EnumMap<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, error);
         data.topics().forEach(topic ->
                 topic.partitions().forEach(partition ->
