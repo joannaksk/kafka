@@ -397,8 +397,8 @@ public class RequestResponseTest {
 
 
         checkRequest(createAddPartitionsToTxnRequest(), true);
-        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
         checkResponse(createAddPartitionsToTxnResponse(), 0, true);
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
     }
 
     @Test
@@ -409,8 +409,8 @@ public class RequestResponseTest {
 
 
         checkRequest(createAddOffsetsToTxnRequest(), true);
-        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
         checkResponse(createAddOffsetsToTxnResponse(), 0, true);
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
     }
 
     @Test
@@ -421,8 +421,8 @@ public class RequestResponseTest {
 
 
         checkRequest(createEndTxnRequest(), true);
-        checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
         checkResponse(createEndTxnResponse(), 0, true);
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
     }
 
     @Test
@@ -433,8 +433,8 @@ public class RequestResponseTest {
 
 
         checkRequest(createWriteTxnMarkersRequest(), true);
-        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
     }
 
     @Test
@@ -445,8 +445,8 @@ public class RequestResponseTest {
 
 
         checkRequest(createTxnOffsetCommitRequest(), true);
-        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
     }
 
     @Test
