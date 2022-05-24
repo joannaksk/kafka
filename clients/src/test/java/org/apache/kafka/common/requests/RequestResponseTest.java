@@ -286,17 +286,17 @@ public class RequestResponseTest {
 
         checkResponse(createMetadataResponse(), 0, true);
         checkResponse(createMetadataResponse(), 1, true);
-        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
     }
 
     @Test
     public void testSerializationOffsetFetch() throws Exception {
         checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
+
         checkErrorResponse(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), new NotCoordinatorException("Not Coordinator"), true);
         checkRequest(createOffsetFetchRequest(0), true);
         checkRequest(createOffsetFetchRequest(1), true);
         checkRequest(createOffsetFetchRequest(2), true);
-        checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
+
         checkErrorResponse(createOffsetFetchRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createOffsetFetchRequest(1), new UnknownServerException(), true);
         checkErrorResponse(createOffsetFetchRequest(2), new UnknownServerException(), true);
@@ -394,20 +394,10 @@ public class RequestResponseTest {
         checkRequest(createAddPartitionsToTxnRequest(), true);
         checkResponse(createAddPartitionsToTxnResponse(), 0, true);
         checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
-
-
-        checkRequest(createAddPartitionsToTxnRequest(), true);
-        checkResponse(createAddPartitionsToTxnResponse(), 0, true);
-        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
     }
 
     @Test
     public void testSerializationAddOffsetsToTxn() {
-        checkRequest(createAddOffsetsToTxnRequest(), true);
-        checkResponse(createAddOffsetsToTxnResponse(), 0, true);
-        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
-
-
         checkRequest(createAddOffsetsToTxnRequest(), true);
         checkResponse(createAddOffsetsToTxnResponse(), 0, true);
         checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException(), true);
@@ -418,11 +408,6 @@ public class RequestResponseTest {
         checkRequest(createEndTxnRequest(), true);
         checkResponse(createEndTxnResponse(), 0, true);
         checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
-
-
-        checkRequest(createEndTxnRequest(), true);
-        checkResponse(createEndTxnResponse(), 0, true);
-        checkErrorResponse(createEndTxnRequest(), new UnknownServerException(), true);
     }
 
     @Test
@@ -430,20 +415,10 @@ public class RequestResponseTest {
         checkRequest(createWriteTxnMarkersRequest(), true);
         checkResponse(createWriteTxnMarkersResponse(), 0, true);
         checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
-
-
-        checkRequest(createWriteTxnMarkersRequest(), true);
-        checkResponse(createWriteTxnMarkersResponse(), 0, true);
-        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException(), true);
     }
 
     @Test
     public void testSerializationTxnOffsetCommit() {
-        checkRequest(createTxnOffsetCommitRequest(), true);
-        checkResponse(createTxnOffsetCommitResponse(), 0, true);
-        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
-
-
         checkRequest(createTxnOffsetCommitRequest(), true);
         checkResponse(createTxnOffsetCommitResponse(), 0, true);
         checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException(), true);
@@ -719,14 +694,17 @@ public class RequestResponseTest {
         builder.build((short) 0);
     }
 
-    @Test
-    public void produceRequestToStringTest() {
-        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        assertEquals(1, request.partitionRecordsOrFail().size());
+    private void assertPartitionProperties(ProduceRequest request) {
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
         assertFalse(request.toString(true).contains("numPartitions"));
+    }
+    @Test
+    public void produceRequestToStringTest() {
+        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
+        assertEquals(1, request.partitionRecordsOrFail().size());
+        assertPartitionProperties(request);
 
         request.clearPartitionRecords();
         try {
@@ -737,12 +715,14 @@ public class RequestResponseTest {
         }
 
         // `toString` should behave the same after `clearPartitionRecords`
-        assertFalse(request.toString(false).contains("partitionSizes"));
-        assertTrue(request.toString(false).contains("numPartitions=1"));
-        assertTrue(request.toString(true).contains("partitionSizes"));
-        assertFalse(request.toString(true).contains("numPartitions"));
+        assertPartitionProperties(request);
     }
 
+    private void assertProduceRequestPartitionResponseProperties(ProduceResponse.PartitionResponse partitionResponse) {
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
+        assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
+        assertEquals(RecordBatch.NO_TIMESTAMP, partitionResponse.logAppendTime);
+    }
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
@@ -751,9 +731,7 @@ public class RequestResponseTest {
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());
         ProduceResponse.PartitionResponse partitionResponse = errorResponse.responses().values().iterator().next();
-        assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
-        assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(RecordBatch.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertProduceRequestPartitionResponseProperties(partitionResponse);
 
         request.clearPartitionRecords();
 
@@ -761,9 +739,7 @@ public class RequestResponseTest {
         errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());
         partitionResponse = errorResponse.responses().values().iterator().next();
-        assertEquals(Errors.NOT_ENOUGH_REPLICAS, partitionResponse.error);
-        assertEquals(ProduceResponse.INVALID_OFFSET, partitionResponse.baseOffset);
-        assertEquals(RecordBatch.NO_TIMESTAMP, partitionResponse.logAppendTime);
+        assertProduceRequestPartitionResponseProperties(partitionResponse);
     }
 
     @Test
@@ -903,19 +879,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testFetchRequestWithMetadata() throws Exception {
-        FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
-        Struct struct = request.toStruct();
-        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
-        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
-
-        request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
-        struct = request.toStruct();
-        deserialized = (FetchRequest) deserialize(request, struct, request.version());
-        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
-    }
-
-    @Test
     public void testJoinGroupRequestVersion0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
@@ -997,13 +960,15 @@ public class RequestResponseTest {
         assertTrue(response.data.apiKeys().isEmpty());
     }
 
+    private void assertApiVersionsResponseError(Struct struct) {
+        ApiVersionsResponse response = ApiVersionsResponse.
+                fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
+
+    }
     @Test
     public void testApiVersionResponseStructParsingFallback() {
-        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
-        ApiVersionsResponse response = ApiVersionsResponse.
-            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
-
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertApiVersionsResponseError(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0));
     }
 
     @Test(expected = SchemaException.class)
@@ -1014,11 +979,7 @@ public class RequestResponseTest {
 
     @Test
     public void testApiVersionResponseStructParsing() {
-        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.
-            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
-
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertApiVersionsResponseError(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion()));
     }
 
     private ResponseHeader createResponseHeader(short headerVersion) {
@@ -1038,33 +999,27 @@ public class RequestResponseTest {
         return FindCoordinatorResponse.prepareResponse(Errors.NONE, node);
     }
 
-    private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
+    private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> getFetchData() {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
                 1000000, Optional.of(15)));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
                 1000000, Optional.of(25)));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+        return fetchData;
+    }
+
+    private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
+        return FetchRequest.Builder.forConsumer(100, 100000, getFetchData()).
             metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, Optional.of(15)));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, Optional.of(25)));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+        return FetchRequest.Builder.forConsumer(100, 100000, getFetchData()).
             isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version) {
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, Optional.of(15)));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, Optional.of(25)));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
+        return FetchRequest.Builder.forConsumer(100, 100000, getFetchData()).setMaxBytes(1000).build((short) version);
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse(Errors error, int sessionId) {
@@ -1074,27 +1029,14 @@ public class RequestResponseTest {
     private FetchResponse<MemoryRecords> createFetchResponse(int sessionId) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
-            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), null, records));
-        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
-            new FetchResponse.AbortedTransaction(234L, 999L));
-        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
-            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE, 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), null, records));
+        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(new FetchResponse.AbortedTransaction(234L, 999L));
+        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE, 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
         return new FetchResponse<>(Errors.NONE, responseData, 25, sessionId);
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse() {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
-                1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), null, records));
-
-        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
-                new FetchResponse.AbortedTransaction(234L, 999L));
-        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
-                1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
-
-        return new FetchResponse<>(Errors.NONE, responseData, 25, INVALID_SESSION_ID);
+        return createFetchResponse(INVALID_SESSION_ID);
     }
 
     private HeartbeatRequest createHeartBeatRequest() {
